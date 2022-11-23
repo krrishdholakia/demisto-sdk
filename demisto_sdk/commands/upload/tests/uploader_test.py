@@ -14,8 +14,8 @@ from click.testing import CliRunner
 from demisto_client.demisto_api import DefaultApi
 from demisto_client.demisto_api.rest import ApiException
 from packaging.version import parse
+from typer.testing import CliRunner
 
-from demisto_sdk.__main__ import main, upload
 from demisto_sdk.commands.common import constants
 from demisto_sdk.commands.common.constants import (CLASSIFIERS_DIR,
                                                    INTEGRATIONS_DIR,
@@ -29,6 +29,7 @@ from demisto_sdk.commands.common.legacy_git_tools import git_path
 from demisto_sdk.commands.common.tools import get_yml_paths_in_dir, src_root
 from demisto_sdk.commands.test_content import tools
 from demisto_sdk.commands.upload import uploader
+from demisto_sdk.commands.upload.upload import app as upload_app
 from demisto_sdk.commands.upload.uploader import (
     ItemDetacher, Uploader, parse_error_response, print_summary,
     sort_directories_based_on_dependencies)
@@ -780,7 +781,8 @@ class TestZippedPackUpload:
         mocker.patch.object(Uploader, 'notify_user_should_override_packs', return_value=True)
 
         # run
-        click.Context(command=upload).invoke(upload, input=input)
+        runner = CliRunner()
+        runner.invoke(upload_app, [input])
 
         # validate
         disable_verification_call_args = tools.update_server_configuration.call_args_list[0][1]
@@ -805,7 +807,8 @@ class TestZippedPackUpload:
         mocker.patch.object(Uploader, 'zipped_pack_uploader')
 
         # run
-        click.Context(command=upload).invoke(upload, input=TEST_PACK, zip=True)
+        runner = CliRunner()
+        runner.invoke(upload_app, [TEST_PACK, '--zip'])
 
         # validate
         assert 'uploadable_packs.zip' in Uploader.zipped_pack_uploader.call_args[1]['path']
@@ -828,7 +831,8 @@ class TestZippedPackUpload:
         mocker.patch.object(Uploader, 'notify_user_should_override_packs', return_value=True)
 
         # run
-        click.Context(command=upload).invoke(upload, input=TEST_PACK_ZIP)
+        runner = CliRunner()
+        runner.invoke(upload_app, [TEST_PACK_ZIP])
 
         # validate
         disable_verification_call_args = tools.update_server_configuration.call_args_list[0][1]
@@ -852,10 +856,11 @@ class TestZippedPackUpload:
         mocker.patch('click.secho')
 
         # run
-        status = click.Context(command=upload).invoke(upload, input=input)
+        runner = CliRunner()
+        result = runner.invoke(upload_app, [input])
 
         # validate
-        status == 1
+        assert result.exit_code == 1
         uploader.click.secho.call_args_list[1].args == INVALID_ZIP_ERROR.format(path=input)
 
     def test_error_in_disable_pack_verification(self, mocker):
@@ -874,10 +879,11 @@ class TestZippedPackUpload:
         mocker.patch.object(API_CLIENT, 'upload_content_packs')
 
         # run
-        status = click.Context(command=upload).invoke(upload, input=TEST_PACK_ZIP)
+        runner = CliRunner()
+        result = runner.invoke(upload_app, [TEST_PACK_ZIP])
 
         # validate
-        assert status == 1
+        assert result.exit_code == 1
         assert API_CLIENT.upload_content_packs.call_count == 0
 
     def test_error_in_enable_pack_verification(self, mocker):
@@ -976,7 +982,7 @@ class TestZippedPackUpload:
         """
         invalid_zip_path = 'not_exist_dir/not_exist_zip'
         runner = CliRunner(mix_stderr=False)
-        result = runner.invoke(main, ['upload', "-i", invalid_zip_path, "--insecure"])
+        result = runner.invoke(upload, [invalid_zip_path, "--insecure"])
         assert result.exit_code == 2
         assert isinstance(result.exception, SystemExit)
         assert f"Invalid value for '-i' / '--input': Path '{invalid_zip_path}' does not exist" in result.stderr

@@ -2,22 +2,19 @@
 import copy
 import logging
 import os
-import shutil
 import sys
-import tempfile
-from configparser import ConfigParser, MissingSectionHeaderError
 from pathlib import Path
 from typing import IO, Any, Dict
 
 import click
 import git
+import typer
 from pkg_resources import DistributionNotFound, get_distribution
 
 from demisto_sdk.commands.common.configuration import Configuration
 from demisto_sdk.commands.common.constants import (ENV_DEMISTO_SDK_MARKETPLACE,
                                                    MODELING_RULES_DIR,
-                                                   PARSING_RULES_DIR, FileType,
-                                                   MarketplaceVersions)
+                                                   PARSING_RULES_DIR, FileType)
 from demisto_sdk.commands.common.content_constant_paths import \
     ALL_PACKS_DEPENDENCIES_DEFAULT_PATH
 from demisto_sdk.commands.common.handlers import JSON_Handler
@@ -30,6 +27,8 @@ from demisto_sdk.commands.common.tools import (find_type,
 from demisto_sdk.commands.content_graph.interface.neo4j.neo4j_graph import \
     Neo4jContentGraphInterface
 from demisto_sdk.commands.split.ymlsplitter import YmlSplitter
+from demisto_sdk.commands.upload.upload import app as upload_app
+from demisto_sdk.utils import check_configuration_file
 
 json = JSON_Handler()
 
@@ -91,38 +90,6 @@ class DemistoSDK:
 
 
 pass_config = click.make_pass_decorator(DemistoSDK, ensure=True)
-
-
-def check_configuration_file(command, args):
-    config_file_path = '.demisto-sdk-conf'
-    true_synonyms = ['true', 'True', 't', '1']
-    if os.path.isfile(config_file_path):
-        try:
-            config = ConfigParser(allow_no_value=True)
-            config.read(config_file_path)
-
-            if command in config.sections():
-                for key in config[command]:
-                    if key in args:
-                        # if the key exists in the args we will run it over if it is either:
-                        # a - a flag currently not set and is defined in the conf file
-                        # b - not a flag but an arg that is currently None and there is a value for it in the conf file
-                        if args[key] is False and config[command][key] in true_synonyms:
-                            args[key] = True
-
-                        elif args[key] is None and config[command][key] is not None:
-                            args[key] = config[command][key]
-
-                    # if the key does not exist in the current args, add it
-                    else:
-                        if config[command][key] in true_synonyms:
-                            args[key] = True
-
-                        else:
-                            args[key] = config[command][key]
-
-        except MissingSectionHeaderError:
-            pass
 
 
 @click.group(invoke_without_command=True, no_args_is_help=True, context_settings=dict(max_content_width=100), )
@@ -883,98 +850,9 @@ def format(
 
 
 # ====================== upload ====================== #
-@main.command()
-@click.help_option(
-    '-h', '--help'
-)
-@click.option(
-    "-i", "--input",
-    type=PathsParamType(exists=True, resolve_path=True),
-    help="The path of file or a directory to upload. The following are supported:\n"
-         "- Pack\n"
-         "- A content entity directory that is inside a pack. For example: an Integrations "
-         "directory or a Layouts directory.\n"
-         "- Valid file that can be imported to Cortex XSOAR manually. For example a playbook: "
-         "helloWorld.yml", required=False
-)
-@click.option(
-    "--input-config-file",
-    type=PathsParamType(exists=True, resolve_path=True),
-    help="The path to the config file to download all the custom packs from", required=False
-)
-@click.option(
-    "-z", "--zip",
-    help="Compress the pack to zip before upload, this flag is relevant only for packs.", is_flag=True
-)
-@click.option(
-    "-x", "--xsiam",
-    help="Upload the pack to XSIAM server. Must be used together with -z", is_flag=True
-)
-@click.option(
-    "--keep-zip", help="Directory where to store the zip after creation, this argument is relevant only for packs "
-                       "and in case the --zip flag is used.", required=False, type=click.Path(exists=True))
-@click.option(
-    "--insecure",
-    help="Skip certificate validation", is_flag=True
-)
-@click.option(
-    "--skip_validation", is_flag=True,
-    help="Only for upload zipped packs, "
-         "if true will skip upload packs validation, use just when migrate existing custom content to packs."
-)
-@click.option(
-    "-v", "--verbose",
-    help="Verbose output", is_flag=True
-)
-@click.option(
-    "--reattach",
-    help="Reattach the detached files in the XSOAR instance"
-         "for the CI/CD Flow. If you set the --input-config-file flag, "
-         "any detached item in your XSOAR instance that isn't currently in the repo's SystemPacks folder "
-         "will be re-attached.)", is_flag=True
-)
-def upload(**kwargs):
-    """Upload integration or pack to Demisto instance.
-    DEMISTO_BASE_URL environment variable should contain the Demisto server base URL.
-    DEMISTO_API_KEY environment variable should contain a valid Demisto API Key.
-    * Note: Uploading classifiers to Cortex XSOAR is available from version 6.0.0 and up. *
-    """
-    from demisto_sdk.commands.upload.uploader import ConfigFileParser, Uploader
-    from demisto_sdk.commands.zip_packs.packs_zipper import (EX_FAIL,
-                                                             PacksZipper)
-    keep_zip = kwargs.pop('keep_zip')
-    is_zip = kwargs.pop('zip', False)
-    config_file_path = kwargs.pop('input_config_file')
-    is_xsiam = kwargs.pop('xsiam', False)
-    if is_zip or config_file_path:
-        if is_zip:
-            pack_path = kwargs['input']
 
-        else:
-            config_file_to_parse = ConfigFileParser(config_file_path=config_file_path)
-            pack_path = config_file_to_parse.parse_file()
-            kwargs['detached_files'] = True
-        if is_xsiam:
-            marketplace = MarketplaceVersions.MarketplaceV2.value
-        else:
-            marketplace = MarketplaceVersions.XSOAR.value
-        os.environ[ENV_DEMISTO_SDK_MARKETPLACE] = marketplace.lower()
-
-        output_zip_path = keep_zip or tempfile.mkdtemp()
-        packs_unifier = PacksZipper(pack_paths=pack_path, output=output_zip_path,
-                                    content_version='0.0.0', zip_all=True, quiet_mode=True, marketplace=marketplace)
-        packs_zip_path, pack_names = packs_unifier.zip_packs()
-        if packs_zip_path is None and not kwargs.get('detached_files'):
-            return EX_FAIL
-
-        kwargs['input'] = packs_zip_path
-        kwargs['pack_names'] = pack_names
-
-    check_configuration_file('upload', kwargs)
-    upload_result = Uploader(**kwargs).upload()
-    if (is_zip or config_file_path) and not keep_zip:
-        shutil.rmtree(output_zip_path, ignore_errors=True)
-    return upload_result
+upload_typer_object = typer.main.get_command(upload_app)
+main.add_command(upload_typer_object, 'upload')
 
 
 # ====================== download ====================== #
