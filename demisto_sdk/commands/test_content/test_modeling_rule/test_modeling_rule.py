@@ -425,7 +425,7 @@ def validate_modeling_rule(
                 printr(execd_cmd)
                 raise typer.Exit(1)
             push_test_data_to_tenant(xsiam_client, mr_entity, test_data)
-            check_dataset_exists(xsiam_client, test_data)
+            check_dataset_exists(xsiam_client, test_data, timeout=280)
         else:
             logger.info(
                 '[cyan]The command flag "--no-push" was passed - skipping pushing of test data[/cyan]',
