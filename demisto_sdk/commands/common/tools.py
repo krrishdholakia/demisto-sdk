@@ -3022,6 +3022,8 @@ def string_to_bool(
         accept_yes_no: bool = False,
         accept_int: bool = False,
         accept_single_letter: bool = False,
+        use_default: bool = False,
+        default: Optional[bool] = None,
 ) -> Optional[bool]:
     if not isinstance(input_, str):
         raise ValueError('cannot convert non-string to bool')
@@ -3059,6 +3061,9 @@ def string_to_bool(
     if input_ in considered_false:
         return False
 
+    if use_default:
+        return default
+    
     raise ValueError(f'cannot convert string {input_} to bool')
 
 
