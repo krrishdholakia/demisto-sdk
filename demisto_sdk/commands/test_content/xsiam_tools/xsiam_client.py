@@ -181,6 +181,10 @@ class XsiamApiClient(XsiamApiInterface):
         formatted_data = '\n'.join([json.dumps(d) for d in data])
         compressed_data = gzip.compress(formatted_data.encode('utf-8'))
         response = self._session.post(endpoint, data=compressed_data, headers=additional_headers)
+        from rich import print as printr
+        printr(response)
+        printr(response.text)
+        printr(response.json())
         try:
             data = response.json()
         except requests.exceptions.JSONDecodeError:

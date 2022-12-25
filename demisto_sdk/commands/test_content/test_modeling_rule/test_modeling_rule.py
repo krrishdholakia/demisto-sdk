@@ -214,6 +214,9 @@ def push_test_data_to_tenant(xsiam_client: XsiamApiClient, mr: ModelingRule, tes
         for event_log in test_data.data if isinstance(event_log.event_data, dict)
     ]
     logger.info('[cyan]Pushing test data to tenant...[/cyan]', extra={'markup': True})
+    printr(f'events_test_data: {events_test_data}')
+    printr(f'vendor: {mr.rules[0].vendor}')
+    printr(f'product: {mr.rules[0].product}')
     try:
         xsiam_client.push_to_dataset(events_test_data, mr.rules[0].vendor, mr.rules[0].product)
     except requests.exceptions.HTTPError:
@@ -408,6 +411,11 @@ def validate_modeling_rule(
         xsiam_client = XsiamApiClient(xsiam_client_cfg)
         verify_pack_exists_on_tenant(xsiam_client, mr_entity, interactive)
         test_data = init_test_data.TestData.parse_file(mr_entity.testdata_path.as_posix())
+
+        printr(f'testdata_path: {mr_entity.testdata_path.as_posix()}')
+        printr(f'testdata_path exists: {mr_entity.testdata_path.exists()}')
+        printr(f'testdata_path contents: {mr_entity.testdata_path.read_text()}')
+        printr(f'test_data: {test_data}')
 
         if push:
             if missing_event_data:
