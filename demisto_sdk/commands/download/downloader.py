@@ -329,16 +329,17 @@ class Downloader:
             scripts_id_name: dict = {}
             # step 1 map all UUIDs to name
             for member in tar.getmembers():
-                file_name: str = self.update_file_prefix(member.name.strip("/"))
-                file_path: str = os.path.join(self.custom_content_temp_dir, file_name)
-                extracted_file = tar.extractfile(member)
-                if extracted_file:
-                    string_to_write = extracted_file.read().decode("utf-8")
-                    scripts_id_name = self.map_script(string_to_write, scripts_id_name)
-                else:
-                    raise FileNotFoundError(
-                        f"Could not extract files from tar file: {file_path}"
-                    )
+                if 'automation-' in member.name:  # I believe this checks if script
+                    file_name: str = self.update_file_prefix(member.name.strip("/"))
+                    file_path: str = os.path.join(self.custom_content_temp_dir, file_name)
+                    extracted_file = tar.extractfile(member)
+                    if extracted_file:
+                        string_to_write = extracted_file.read().decode("utf-8")
+                        scripts_id_name = self.map_script(string_to_write, scripts_id_name)
+                    else:
+                        raise FileNotFoundError(
+                            f"Could not extract files from tar file: {file_path}"
+                        )
 
             for member in tar.getmembers():
                 file_name: str = self.update_file_prefix(member.name.strip("/"))
