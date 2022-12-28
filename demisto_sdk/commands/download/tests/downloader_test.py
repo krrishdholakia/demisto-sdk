@@ -1207,15 +1207,7 @@ def test_build_file_name():
             {"f1e4c6e5-0d44-48a0-8020-a9711243e918": "TestingScript"},
         ),
         (
-            '{\n\t"name":"TestingLayout",\n\t"detailsV2":{\n\t\t"tabs":[\n\t\t\t{\n\t\t\t\t"sections":[\n\t\t\t\t\t{\n\t\t\t\t'
-            '\t\t"items":[\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t"scriptId":"f1e4c6e5-0d44-48a0-8020-a9711243e918"\n\t\t\t\t\t\t'
-            "\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t}\n\t\t\t\t]\n\t\t\t}\n\t\t]\n\t}\n}",
-            "layoutcontainer-TestingLayout.json",
-            {"f1e4c6e5-0d44-48a0-8020-a9711243e918": "TestingScript"},
-            '{\n\t"name":"TestingLayout",\n\t"detailsV2":{\n\t\t"tabs":[\n\t\t\t{\n\t\t\t\t"sections":[\n\t\t\t\t\t{\n\t\t\t\t'
-            '\t\t"items":[\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t"scriptId":"TestingScript"\n\t\t\t\t\t\t'
-            "\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t}\n\t\t\t\t]\n\t\t\t}\n\t\t]\n\t}\n}",
-            {"f1e4c6e5-0d44-48a0-8020-a9711243e918": "TestingScript"},
+            {"name": "TestingLayout","detailsV2":{"tabs":[{"sections":[{"items":[{"scriptId":"f1e4c6e5-0d44-48a0-8020-a9711243e918"}]}]}]}},
         ),
     ],
 )

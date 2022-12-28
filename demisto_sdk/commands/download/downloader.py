@@ -384,10 +384,11 @@ class Downloader:
                 # File might empty
                 if extracted_file:
                     string_to_write = extracted_file.read().decode("utf-8")
+                    # TODO: run only when self.run_format
+                    # TODO: Restore previous playbook handling when not self.run_format
                     string_to_write, scripts_id_name = self.handle_file(
                         string_to_write, member.name, scripts_id_name
                     )
-
                     try:
                         with open(file_path, "w") as file:
                             file.write(string_to_write)
