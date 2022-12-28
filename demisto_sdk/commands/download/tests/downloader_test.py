@@ -1190,33 +1190,30 @@ def test_build_file_name():
 
 
 @pytest.mark.parametrize(
-    "original_string, object_name, scripts_mapper, expected_string, expected_mapper",
+    "original_string, scripts_mapper, expected_string",
     [
         (
             "name: TestingScript\ncommonfields:\n id: f1e4c6e5-0d44-48a0-8020-a9711243e918",
-            "automation-Testing.yml",
             {},
-            "name: TestingScript\ncommonfields:\n id: f1e4c6e5-0d44-48a0-8020-a9711243e918",
-            {"f1e4c6e5-0d44-48a0-8020-a9711243e918": "TestingScript"},
+            "name: TestingScript\ncommonfields:\n id: f1e4c6e5-0d44-48a0-8020-a9711243e918"
         ),
         (
             '{\n\t"name":"TestingField",\n\t"script":"f1e4c6e5-0d44-48a0-8020-a9711243e918"\n}',
-            "incidentfield-TestingField.json",
             {"f1e4c6e5-0d44-48a0-8020-a9711243e918": "TestingScript"},
-            '{\n\t"name":"TestingField",\n\t"script":"TestingScript"\n}',
-            {"f1e4c6e5-0d44-48a0-8020-a9711243e918": "TestingScript"},
+            '{\n\t"name":"TestingField",\n\t"script":"TestingScript"\n}'
         ),
         (
-            {"name": "TestingLayout","detailsV2":{"tabs":[{"sections":[{"items":[{"scriptId":"f1e4c6e5-0d44-48a0-8020-a9711243e918"}]}]}]}},
+            '{"name":"TestingLayout","detailsV2":{"tabs":["sections":["items":[{"scriptId":"f1e4c6e5-0d44-48a0-8020-a9711243e918"}]}]}]}}',
+            {"f1e4c6e5-0d44-48a0-8020-a9711243e918": "TestingScript"},
+            '{"name":"TestingLayout","detailsV2":{"tabs":["sections":["items":[{"scriptId":"TestingScript"}]}]}]}}'
         ),
     ],
 )
-def test_handle_file(
-    original_string, object_name, scripts_mapper, expected_string, expected_mapper
+def test_replace_uuids(
+    original_string, scripts_mapper, expected_string
 ):
     downloader = Downloader(output="", input="", regex="", all_custom_content=True)
-    final_string, final_mapper = downloader.handle_file(
-        original_string, object_name, scripts_mapper
+    final_string = downloader.replace_uuids(
+        original_string, scripts_mapper
     )
     assert final_string == expected_string
-    assert final_mapper == expected_mapper

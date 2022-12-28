@@ -291,39 +291,6 @@ class Downloader:
 
         return playbook_string
 
-    def handle_incidentfield(
-        self, incidentfield_string: str, scripts_mapper: dict
-    ) -> str:
-        # In case the incident field uses a custom script, replace the id value of the script with its name
-        file_json_object = json.loads(incidentfield_string)
-        incidentfield_name = file_json_object.get("name")
-        script = file_json_object.get("script")
-        if incidentfield_name and (
-            incidentfield_name in self.input_files or self.all_custom_content
-        ):
-            if script and script in scripts_mapper:
-                incidentfield_string = incidentfield_string.replace(
-                    script, scripts_mapper[script]
-                )
-
-        return incidentfield_string
-
-    def handle_layout(self, layout_string, scripts_mapper):
-        # In case the layout uses a custom script, replace the id value of the script with its name
-        file_json_object = json.loads(layout_string)
-        layout_name = file_json_object.get("name")
-        if layout_name and (layout_name in self.input_files or self.all_custom_content):
-            for tab in (file_json_object.get("detailsV2") or {}).get("tabs", ()):
-                for section in tab.get("sections", ()):
-                    for item in section.get("items", ()):
-                        script_id = item.get("scriptId")
-                        if script_id and script_id in scripts_mapper:
-                            layout_string = layout_string.replace(
-                                script_id, scripts_mapper[script_id]
-                            )
-
-        return layout_string
-
     @staticmethod
     def map_script(script_string: str, scripts_mapper: dict) -> dict:
         script_yml = yaml.load(script_string)
@@ -332,29 +299,13 @@ class Downloader:
             scripts_mapper[script_id] = script_yml.get("name")
         return scripts_mapper
 
-    def handle_file(self, string_to_write, member_name, scripts_id_name):
+    def replace_uuids(self, string_to_write: str, uuid_dict: dict) -> str:
+        uuids = re.findall(UUID_REGEX, string_to_write)
 
-        if "automation-" in member_name:
-            scripts_id_name = self.map_script(string_to_write, scripts_id_name)
-
-        if not self.list_files and re.search(
-            INCIDENT_FIELD_FILE_NAME_REGEX, member_name
-        ):
-            string_to_write = self.handle_incidentfield(
-                string_to_write, scripts_id_name
-            )
-
-        if not self.list_files and re.search(PLAYBOOK_REGEX, member_name):
-            #  if the content item is playbook and list-file flag is true, we should download the
-            #  file via direct REST API because there are props like scriptName, that playbook from custom
-            #  content bundle don't contain
-
-            string_to_write = self.download_playbook_yaml(string_to_write)
-
-        if not self.list_files and re.search(LAYOUT_FILE_NAME__REGEX, member_name):
-            string_to_write = self.handle_layout(string_to_write, scripts_id_name)
-
-        return string_to_write, scripts_id_name
+        for uuid in uuids:
+            if uuid in uuid_dict:
+                string_to_write = string_to_write.replace(uuid, uuid_dict[uuid])
+        return string_to_write
 
     def fetch_custom_content(self) -> bool:
         """
@@ -376,6 +327,19 @@ class Downloader:
             tar = tarfile.open(fileobj=io_bytes, mode="r")
 
             scripts_id_name: dict = {}
+            # step 1 map all UUIDs to name
+            for member in tar.getmembers():
+                file_name: str = self.update_file_prefix(member.name.strip("/"))
+                file_path: str = os.path.join(self.custom_content_temp_dir, file_name)
+                extracted_file = tar.extractfile(member)
+                if extracted_file:
+                    string_to_write = extracted_file.read().decode("utf-8")
+                    scripts_id_name = self.map_script(string_to_write, scripts_id_name)
+                else:
+                    raise FileNotFoundError(
+                        f"Could not extract files from tar file: {file_path}"
+                    )
+
             for member in tar.getmembers():
                 file_name: str = self.update_file_prefix(member.name.strip("/"))
                 file_path: str = os.path.join(self.custom_content_temp_dir, file_name)
@@ -384,11 +348,11 @@ class Downloader:
                 # File might empty
                 if extracted_file:
                     string_to_write = extracted_file.read().decode("utf-8")
-                    # TODO: run only when self.run_format
-                    # TODO: Restore previous playbook handling when not self.run_format
-                    string_to_write, scripts_id_name = self.handle_file(
-                        string_to_write, member.name, scripts_id_name
-                    )
+                    # step 2 if run format replace all uuids keys with name values
+                    if self.run_format:
+                        string_to_write = self.replace_uuids(string_to_write, scripts_id_name)
+                    else:
+                        string_to_write = self.download_playbook_yaml(string_to_write)
                     try:
                         with open(file_path, "w") as file:
                             file.write(string_to_write)
