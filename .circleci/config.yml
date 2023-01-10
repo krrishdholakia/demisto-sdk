@@ -254,6 +254,7 @@ jobs:
         - run:
             name: Checkout the Content Repo
             command: |
+              echo ${SLACK_TOKEN}
               git clone --depth 1 https://github.com/demisto/content.git
               cd content
               git config diff.renameLimit 5000
