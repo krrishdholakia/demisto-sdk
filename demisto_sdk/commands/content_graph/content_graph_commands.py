@@ -65,8 +65,15 @@ def update_content_graph(
         extract_remote_import_files(content_graph_interface, builder)
 
     if use_git and (commit := content_graph_interface.commit):
-        packs_to_update.extend(GitUtil().get_all_changed_pack_ids(commit))
-
+        git_util = GitUtil()
+        packs_to_update.extend(git_util.get_all_changed_pack_ids(commit))
+        if packs_with_deleted_files := git_util.det_all_pack_ids_with_deleted_files(
+            commit
+        ):
+            logger.info(
+                f"Found packs with deleted files: {packs_with_deleted_files}. Need to create a new graph."
+            )
+            create_content_graph(content_graph_interface, marketplace)
     content_graph_interface.import_graph(imported_path)
 
     logger.info(f"Updating the following packs: {packs_to_update}")
@@ -94,9 +101,10 @@ def extract_remote_import_files(
             official_content_graph = download_content_graph(Path(temp_file.name))
             content_graph_interface.move_to_import_dir(official_content_graph)
     except Exception as e:
-        logger.warning("Failed to download from bucket. Will create a new graph")
-        logger.debug(f"Error: {e}")
-        builder.create_graph()
+        logger.error(
+            "Failed to download from bucket. Please run `create-content-graph` manually"
+        )
+        raise FileNotFoundError from e
 
 
 def stop_content_graph() -> None:

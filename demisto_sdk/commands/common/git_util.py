@@ -466,6 +466,21 @@ class GitUtil:
             if file.parts[0] == PACKS_FOLDER
         }
 
+    def det_all_pack_ids_with_deleted_files(self, prev_ver: str) -> Set[str]:
+        """This will return only pack ids which have deleted files in it
+
+        Args:
+            prev_ver (str): prev_ver to compare with
+
+        Returns:
+            Set[str]: set of pack ids
+        """
+        return {
+            file.parts[1]
+            for file in self.deleted_files(prev_ver)
+            if file.parts[0] == PACKS_FOLDER
+        }
+
     def _get_untracked_files(self, requested_status: str) -> set:
         """return all untracked files of the given requested status.
         Args:
