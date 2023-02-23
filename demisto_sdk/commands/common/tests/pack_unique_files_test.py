@@ -451,6 +451,12 @@ class TestPackUniqueFilesValidator:
             - Case B: Ensure validation passes as both usecases are approved
             - Case C: Ensure validation fails as it contains a non-approved usecase (NonApprovedUsecase)
                       Verify expected error is printed
+
+        ************************************************ NOTE ************************************************
+        If you find yourself fixing this test due to a change to the structure of the approved_usecases.json file in
+        content repo, make sure you add corresponding breaking change message to the SDK changelog as all previous
+        versions will fail.
+        ****************************************************************************************************
         """
         self.restart_validator()
         pack_name = "PackName"
@@ -538,6 +544,12 @@ class TestPackUniqueFilesValidator:
             - Case D: Ensure validation passes as tag is approved
             - Case E: Ensure validation fails as it contains a non-approved xsiam tags (NonApprovedTag)
                       Verify expected error is printed
+
+        ************************************************ NOTE ************************************************
+        If you find yourself fixing this test due to a change to the structure of the approved_tags.json file in content
+        repo, make sure you add corresponding breaking change message to the SDK changelog as all previous versions will
+        fail.
+        ****************************************************************************************************
         """
         self.restart_validator()
         pack_name = "PackName"
@@ -585,6 +597,12 @@ class TestPackUniqueFilesValidator:
             - Validating approved tags
         Then:
             - Ensure validation failes as there is non approved tag prefix
+
+        ************************************************ NOTE ************************************************
+        If you find yourself fixing this test due to a change to the structure of the approved_tags.json file in content
+        repo, make sure you add corresponding breaking change message to the SDK changelog as all previous versions will
+        fail.
+        ****************************************************************************************************
         """
         self.restart_validator()
         pack_name = "PackName"
@@ -623,6 +641,12 @@ class TestPackUniqueFilesValidator:
             - Runing the _is_approved_tag_prefixes validation
         Then:
             - Validating the expected result
+
+        ************************************************ NOTE ************************************************
+        If you find yourself fixing this test due to a change to the structure of the approved_tags.json file in content
+        repo, make sure you add corresponding breaking change message to the SDK changelog as all previous versions will
+        fail.
+        ****************************************************************************************************
         """
         self.restart_validator()
         pack_name = "PackName"

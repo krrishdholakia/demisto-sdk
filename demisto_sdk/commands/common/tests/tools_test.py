@@ -2488,3 +2488,12 @@ def test_find_type_by_path(path: Path, expected_type: Optional[FileType]):
 )
 def test_field_to_cliname(value: str, expected: str):
     assert field_to_cli_name(value) == expected
+
+def test_get_core_pack_list():
+    """
+    Given:
+
+    When:
+    Then:
+    """
+    get_core_pack_list = tools.get_core_pack_list()

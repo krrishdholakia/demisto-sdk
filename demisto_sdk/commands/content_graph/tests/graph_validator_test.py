@@ -520,6 +520,12 @@ def test_validate_dependencies(repository: ContentDTO, capsys, mocker):
     - running the vaidation "validate_dependencies"
     Then
     - Validate the existance invalid core pack dependency
+
+    ************************************************ NOTE ************************************************
+    If you find yourself fixing this test due to a change to the structure of the core_packs_list.json file in content
+    repo, make sure you add corresponding breaking change message to the SDK changelog as all previous versions will
+    fail.
+    ****************************************************************************************************
     """
     mocker.patch(
         "demisto_sdk.commands.common.hook_validations.graph_validator.get_core_pack_list",

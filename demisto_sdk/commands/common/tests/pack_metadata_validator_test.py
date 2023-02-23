@@ -463,6 +463,12 @@ class TestPackMetadataValidator:
             - case 3: Should return False.
             - case 4: Should return False.
             - case 5: Should return False.
+
+        ************************************************ NOTE ************************************************
+        If you find yourself fixing this test due to a change to the structure of the approved_categories.json file in
+        content repo, make sure you add corresponding breaking change message to the SDK changelog as all previous
+        versions will fail.
+        ****************************************************************************************************
         """
         mocker.patch(
             "demisto_sdk.commands.common.hook_validations.integration.tools.get_current_categories",
