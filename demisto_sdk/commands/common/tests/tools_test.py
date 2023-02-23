@@ -2493,6 +2493,13 @@ def test_field_to_cliname(value: str, expected: str):
 
 
 def test_get_core_packs(mocker):
+    """
+    ************************************************ NOTE ************************************************
+    If you find yourself fixing this test due to a change to the structure of the core_packs_list.json file in content
+    repo, make sure you add corresponding breaking change message to the SDK changelog as all previous versions will
+    fail.
+    ****************************************************************************************************
+    """
     def mock_get_remote_file(full_file_path, git_content_config):
         if MARKETPLACE_TO_CORE_PACKS_FILE[MarketplaceVersions.XSOAR] in full_file_path:
             return {
