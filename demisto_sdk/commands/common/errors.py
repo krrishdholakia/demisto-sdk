@@ -3254,9 +3254,10 @@ class Errors:
     @staticmethod
     @error_code_decorator
     def layout_container_contains_invalid_types(invalid_types):
+        invalid_types = ", ".join(sorted(invalid_types))
         return (
-            f"The following invalid types were found in the layout: {str(invalid_types)}. Those types are not"
-            f" supported in XSIAM, remove them or change the layout to be XSOAR only"
+            f"The following types were found in the layout, but they are not supported in XSIAM: {invalid_types}. "
+            "Remove them, or change the layout json to be only supported in the XSOAR marketplace (\"marketplaces\": [\"xsoar\"])"
         )
 
     @staticmethod
