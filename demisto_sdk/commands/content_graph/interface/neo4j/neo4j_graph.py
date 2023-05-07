@@ -84,16 +84,18 @@ def _parse_node(element_id: int, node: dict) -> BaseContent:
         NoModelException: If no model found to parse on
     """
     obj: BaseContent
-    content_type = node.get("content_type", "")
+    content_type = node.pop("content_type", None)
+    if "path" in node:
+        node["path"] = Path(node["path"])
     if node.get("not_in_repository"):
-        obj = UnknownContent.parse_obj(node)
+        obj = UnknownContent.construct(**node)
 
+    elif model := content_type_to_model.get(content_type):
+        obj = model.construct(**node)
     else:
-        model = content_type_to_model.get(content_type)
-        if not model:
-            raise NoModelException(f"No model for {content_type}")
-        obj = model.parse_obj(node)
+        raise NoModelException(f"No model for {content_type}")
     obj.database_id = element_id
+    obj.marketplaces = [MarketplaceVersions(marketplace) for marketplace in obj.marketplaces]
     return obj
 
 
@@ -274,14 +276,12 @@ class Neo4jContentGraphInterface(ContentGraphInterface):
                 self._id_to_obj,
             )
             return
-        with Pool(processes=cpu_count()) as pool:
-            results = pool.starmap(
-                _parse_node, ((node.id, dict(node.items())) for node in nodes)
-            )
-            for result in results:
-                assert result.database_id is not None
-                self._id_to_obj[result.database_id] = result
-
+        
+        for node in nodes:
+            result = _parse_node(node.id, dict(node.items()))
+            assert result.database_id is not None
+            self._id_to_obj[result.database_id] = result
+            
     def _search(
         self,
         marketplace: MarketplaceVersions = None,
