@@ -1040,7 +1040,7 @@ class Linter:
     ) -> Tuple[int, str]:
         log_prompt = f"{self._pack_name} - {linter} - Image {test_image}"
         logger.info(f"{log_prompt} - Start")
-        container_name = f"{self._pack_name}-{linter}"
+        container_name = f"{self._pack_name}{linter}"
         # Check if previous run left container a live if it do, we remove it
         self._docker_remove_container(container_name)
 
