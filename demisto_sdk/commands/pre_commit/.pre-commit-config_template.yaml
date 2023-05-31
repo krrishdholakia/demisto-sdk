@@ -76,7 +76,7 @@ repos:
         args: ["-ud", "-n", "--no-validate", "-g"]
 
       - id: validate
-        args: ["-g"]
+        args: ["-g", "--post-commit"]
 
       - id: secrets
         args: ["--ignore-entropy"]
