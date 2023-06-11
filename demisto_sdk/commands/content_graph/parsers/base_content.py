@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Optional
 
+from demisto_sdk.commands.common.content_constant_paths import CONTENT_PATH
+from demisto_sdk.commands.common.logger import logger
 from demisto_sdk.commands.content_graph.common import ContentType
 
 
@@ -17,7 +19,13 @@ class BaseContentParser(ABC):
     content_type: ContentType
 
     def __init__(self, path: Path) -> None:
-        self.path: Path = path
+        try:
+            self.path: Path = path.relative_to(CONTENT_PATH)
+        except ValueError:
+            logger.warning(
+                f"Path {path} is not in {CONTENT_PATH=}, using absolute path"
+            )
+            self.path = path
 
     @property
     @abstractmethod
