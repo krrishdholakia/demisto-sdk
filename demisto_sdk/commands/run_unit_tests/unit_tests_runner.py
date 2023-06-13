@@ -133,6 +133,10 @@ def unit_test_runner(file_paths: List[Path], verbose: bool = False) -> int:
             try:
                 docker_client.images.pull(docker_image)
                 shutil.copy(
+                    Path(__file__).parent / ".pytest.ini",
+                    integration_script.path.parent / ".pytest.ini",
+                )
+                shutil.copy(
                     CONTENT_PATH
                     / "Tests"
                     / "scripts"
