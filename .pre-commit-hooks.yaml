@@ -48,3 +48,11 @@
   require_serial: true
   types: [python]
   exclude: tests/.*|demisto_sdk/commands/init/templates/.*
+
+- id: pyright
+  name: pyright
+  entry: pyright
+  language: python
+  require_serial: true
+  types: [python]
+  exclude: tests/.*|demisto_sdk/commands/init/templates/.*
