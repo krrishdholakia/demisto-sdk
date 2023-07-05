@@ -1,5 +1,6 @@
 import logging
 import logging.config
+import platform
 import os.path
 import sys
 from logging.handlers import RotatingFileHandler
@@ -328,11 +329,11 @@ def logging_setup(
 
     set_demisto_logger(demisto_logger)
 
+    cli_args = [f'"{arg}"' if ' ' in arg else arg for arg in sys.argv[1:]]  # Surround args with spaces with quotes
+    demisto_logger.debug(f"CLI command: demisto-sdk {' '.join(cli_args)}")
     demisto_logger.debug(f"Python version: {sys.version}")
-    demisto_logger.debug(f"Working dir: {os.getcwd()}")
-    import platform
-
     demisto_logger.debug(f"Platform: {platform.system()}")
+    demisto_logger.debug(f"Working dir: {os.getcwd()}")
 
     if not log_file_name_notified:
         demisto_logger.info(

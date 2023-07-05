@@ -201,15 +201,20 @@ class Downloader:
         """
         if not self.verify_flags():
             return 1
+
         if not self.download_system_item and not self.fetch_custom_content():
             return 1
+
         if self.download_system_item and not self.fetch_system_content():
             return 1
+
         if self.handle_list_files_flag():
             return 0
+
         self.handle_init_flag()
         self.handle_all_custom_content_flag()
         self.handle_regex_flag()
+
         if not self.verify_output_pack_is_pack():
             return 1
 
@@ -299,6 +304,7 @@ class Downloader:
                 and self.client.api_client
                 and self.client.api_client.configuration
             ):
+                logger.debug(f"Fetching YAML file for playbook '{playbook_name}' using API call...")
                 api_resp = demisto_client.generic_request_func(
                     self.client, f"/playbook/{playbook_id}/yaml", "GET"
                 )
@@ -327,10 +333,10 @@ class Downloader:
 
         for uuid in set(uuids).intersection(uuid_dict):
             logger.debug(
-                f"Replacing UUID: {uuid} with the following:\
- {uuid_dict[uuid]} in {file_name}"
+                f"Replacing UUID '{uuid}' with '{uuid_dict[uuid]}' in '{file_name}'"
             )
             string_to_write = string_to_write.replace(uuid, uuid_dict[uuid])
+
         return string_to_write
 
     def should_download_playbook(self, file_name: str) -> bool:
@@ -343,6 +349,8 @@ class Downloader:
         self, content_items_file_names: List[Tuple[str, str]], scripts_id_to_name: dict
     ):
         for content_item_as_string, file_name in content_items_file_names:
+            logger.debug(f"Writing file '{file_name}' to '{self.custom_content_temp_dir}'...")
+
             if self.should_download_playbook(file_name):
                 content_item_as_string = self.download_playbook_yaml(
                     content_item_as_string
@@ -350,20 +358,24 @@ class Downloader:
             content_item_as_string = self.replace_uuids(
                 content_item_as_string, scripts_id_to_name, file_name
             )
+
             file_name = self.update_file_prefix(file_name.strip("/"))
             path = Path(self.custom_content_temp_dir, file_name)
             try:
                 path.write_text(content_item_as_string)
 
             except Exception:
-                logger.exception(
-                    "encountered exception, trying to write with encoding=utf8"
+                logger.debug(
+                    "Writing data to file failed. Re-attempting using UTF-8 encoding."
                 )
                 path.write_text(content_item_as_string, encoding="utf8")
+
+            logger.debug(f"File '{file_name}' was written successfully.")
 
     def find_uuids_in_content_item(self, tar: tarfile.TarFile):
         scripts_id_to_name: dict = {}
         content_items_file_names_tuple: List[Tuple[str, str]] = []
+
         for file in tar.getmembers():
             file_name: str = self.update_file_prefix(file.name.strip("/"))
             file_path: str = str(Path(self.custom_content_temp_dir, file_name))
@@ -392,20 +404,27 @@ class Downloader:
             verify = (
                 (not self.insecure) if self.insecure else None
             )  # set to None so demisto_client will use env var DEMISTO_VERIFY_SSL
+            logger.info("Fetching custom content data from server...")
+
             self.client = demisto_client.configure(verify_ssl=verify)
             api_response: tuple = demisto_client.generic_request_func(
                 self.client, "/content/bundle", "GET"
             )
+            logger.debug(f"Received content bundle size (bytes): {len(api_response[0])}")
             body: bytes = ast.literal_eval(api_response[0])
             io_bytes = io.BytesIO(body)
 
-            # Demisto's custom content file is of type tar.gz
+            # XSOAR's custom content file is of type tar.gz
             tar = tarfile.open(fileobj=io_bytes, mode="r")
+            tar_members = tar.getmembers()
+            tar_members_str = ", ".join([m.name.strip('/') for m in tar_members])
+            logger.debug(f"Tar file contents ({len(tar_members)}): {tar_members_str}")
 
             (
                 content_items_file_names_tuple,
                 scripts_id_to_name,
             ) = self.find_uuids_in_content_item(tar)
+
             self.write_custom_content(
                 content_items_file_names_tuple, scripts_id_to_name
             )
@@ -438,16 +457,22 @@ class Downloader:
 
     def get_system_automation(self, req_type):
         automation_list: list = []
+        logger.info("Fetching system automations data from server...")
+
         for script in self.input_files:
             endpoint = f"automation/load/{script}"
             api_response = demisto_client.generic_request_func(
                 self.client, endpoint, req_type
             )
             automation_list.append(ast.literal_eval(api_response[0]))
+
+        logger.info(f"Received {len(automation_list)} system automations from server.")
         return automation_list
 
     def get_system_playbook(self, req_type):
         playbook_list: list = []
+        logger.info("Fetching system playbooks data from server...")
+
         for playbook in self.input_files:
             endpoint = f"/playbook/{playbook}/yaml"
             try:
@@ -457,7 +482,13 @@ class Downloader:
             except ApiException as err:
                 # handling in case the id and name are not the same,
                 # trying to get the id by the name through a different api call
+                logger.debug(f"API call using playbook's name failed:\n{err}\n"
+                             f"Attempting to fetch and use playbook's id...")
+
                 if playbook_id := self.get_playbook_id_by_playbook_name(playbook):
+                    logger.debug(f"Successfully fetched playbook's id - '{playbook_id}'\n"
+                                 f"Attempting to fetch playbook's YAML file using the ID.")
+
                     endpoint = f"/playbook/{playbook_id}/yaml"
                     api_response = demisto_client.generic_request_func(
                         self.client, endpoint, req_type, response_type="object"
@@ -466,6 +497,7 @@ class Downloader:
                     raise err
             playbook_list.append(yaml.load(api_response[0].decode()))
 
+        logger.info(f"Received {len(playbook_list)} system playbooks from server.")
         return playbook_list
 
     def arrange_response(self, system_items_list):
@@ -497,10 +529,14 @@ class Downloader:
                 system_items_list = self.get_system_playbook(req_type)
 
             else:
+                logger.info(f"Fetching system {self.system_item_type} data from server...")
                 api_response = demisto_client.generic_request_func(
                     self.client, endpoint, req_type, body=req_body
                 )
                 system_items_list = ast.literal_eval(api_response[0])
+                logger.info(
+                    f"Received {len(system_items_list)} system {self.system_item_type} from server."
+                )
 
             system_items_list = self.arrange_response(system_items_list)
 
@@ -541,8 +577,7 @@ class Downloader:
                     custom_content_objects.append(custom_content_object)
             # Do not add file to custom_content_objects if it has an invalid format
             except ValueError as e:
-                logger.info(f"[red]Error when loading {file_path}, skipping[/red]")
-                logger.info(f"[red]{e}[/red]")
+                logger.info(f"[red]Error when loading '{file_path}': {e}\nSkipping...[/red]")
         return custom_content_objects
 
     def get_system_content_objects(self) -> List[dict]:
@@ -570,6 +605,7 @@ class Downloader:
         :return: True if list-files flag is on and listing available files process succeeded, False otherwise
         """
         if self.list_files:
+            logger.debug("list-files (-lf) mode detected. Listing available files...")
             self.all_custom_content_objects = self.get_custom_content_objects()
             list_files = [
                 [cco["name"], cco["type"]]
@@ -577,9 +613,9 @@ class Downloader:
                 if cco.get("name")
             ]
             logger.info(
-                "\nThe following files are available to be downloaded from Demisto instance:\n"
+                "The following files are available to download from the configured Cortex XSOAR instance:\n" +
+                tabulate(list_files, headers=["FILE NAME", "FILE TYPE"])
             )
-            logger.info(tabulate(list_files, headers=["FILE NAME", "FILE TYPE"]))
             return True
         return False
 
@@ -589,6 +625,7 @@ class Downloader:
         :return: None
         """
         if self.all_custom_content:
+            logger.debug("all-custom-content (-a) mode detected. Collecting all custom content...")
             custom_content_objects: list = self.get_custom_content_objects()
             names_list: list = [cco["name"] for cco in custom_content_objects]
             # Remove duplicated names, for example: IncidentType & Layout with the same name.
@@ -599,8 +636,11 @@ class Downloader:
         Handles the case where the regex flag is given
         :return: None
         """
-        input_files_regex_match = []
         if self.regex:
+            logger.debug(f"RegEx (-r) mode detected. Collecting all content matching the regex: '{self.regex}'.")
+
+            input_files_regex_match = []
+
             custom_content_objects: list = self.get_custom_content_objects()
             names_list: list = [cco["name"] for cco in custom_content_objects]
 
@@ -617,6 +657,7 @@ class Downloader:
         if not self.init:
             return
 
+        logger.info("Initiating pack structure...")
         root_folder = Path(self.output_pack_path)
         if root_folder.name != "Packs":
             root_folder = root_folder / "Packs"
@@ -631,6 +672,8 @@ class Downloader:
 
         if not self.keep_empty_folders:
             self.remove_empty_folders()
+
+        logger.info(f"Initialized pack structure at '{self.output_pack_path}'.")
 
     def remove_empty_folders(self) -> None:
         """
@@ -648,6 +691,7 @@ class Downloader:
         :return: The verification result
         """
         output_pack_path = self.output_pack_path
+
         if not (
             os.path.isdir(output_pack_path)
             and os.path.basename(os.path.dirname(os.path.abspath(output_pack_path)))
@@ -725,7 +769,7 @@ class Downloader:
 
     def get_playbook_id_by_playbook_name(self, playbook_name: str) -> Optional[str]:
         """
-        extract the playbook id by name,
+        Extract the playbook id by name,
         calling the api returns an object that cannot be parsed properly,
         and its use is only for extracting the id.
 
@@ -735,6 +779,7 @@ class Downloader:
         Returns:
             Optional[str]: The ID of a playbook
         """
+        logger.info(f"Fetching playbook ID using API for '{playbook_name}'...")
         endpoint = "/playbook/search"
         response = demisto_client.generic_request_func(
             self.client,
@@ -812,6 +857,7 @@ class Downloader:
             if self.all_custom_content_objects
             else self.get_custom_content_objects()
         )
+
         for input_file_name in self.input_files:
             input_file_exist_in_cc: bool = False
             for custom_content_object in custom_content_objects:
@@ -829,12 +875,9 @@ class Downloader:
                 )
 
         number_of_files = len(self.custom_content)
+
         logger.info(
-            f"\nDemisto instance: Enumerating objects: {number_of_files}, done."
-        )
-        logger.info(
-            f"Demisto instance: Receiving objects: 100% ({number_of_files}/{number_of_files}),"
-            f" done.\n"
+            f"Fetched {number_of_files} custom objects."
         )
 
     def build_system_content(self) -> None:
@@ -861,12 +904,9 @@ class Downloader:
                 )
 
         number_of_files = len(self.custom_content)
+
         logger.info(
-            f"\nDemisto instance: Enumerating objects: {number_of_files}, done."
-        )
-        logger.info(
-            f"Demisto instance: Receiving objects: 100% ({number_of_files}/{number_of_files}),"
-            f" done.\n"
+            f"Fetched {number_of_files} system objects."
         )
 
     def exist_in_pack_content(self, custom_content_object: dict) -> bool:
@@ -946,7 +986,6 @@ class Downloader:
         :return: None
         """
         for custom_content_object in self.custom_content:
-
             file_entity: str = custom_content_object["entity"]
             file_name: str = custom_content_object["name"]
             entity_path: str = os.path.join(self.output_pack_path, file_entity)
@@ -1207,7 +1246,7 @@ class Downloader:
         :param file_type: The file type
         :return: None
         """
-        logger.info(f'- {action} {file_type} "{file_name}"')
+        logger.info(f"{action} '{file_name}' ({file_type})")
         if self.run_format:  # TODO: Refactored after format had verbose arg
             logger.info("")
 
