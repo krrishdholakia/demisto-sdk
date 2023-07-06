@@ -202,11 +202,15 @@ class Downloader:
         if not self.verify_flags():
             return 1
 
+        logger.debug("Entering 'fetch_custom_content' method")
         if not self.download_system_item and not self.fetch_custom_content():
             return 1
+        logger.debug("Exiting 'fetch_custom_content' method")
 
+        logger.debug("Entering 'fetch_system_content' method")
         if self.download_system_item and not self.fetch_system_content():
             return 1
+        logger.debug("Exiting 'fetch_system_content' method")
 
         if self.handle_list_files_flag():
             return 0
@@ -215,12 +219,29 @@ class Downloader:
         self.handle_all_custom_content_flag()
         self.handle_regex_flag()
 
+        logger.debug("Entering 'verify_output_pack_is_pack' method")
         if not self.verify_output_pack_is_pack():
             return 1
+        logger.debug("Exiting 'verify_output_pack_is_pack' method")
 
+        logger.debug("Entering 'build_pack_content' method")
         self.build_pack_content()
-        self.build_custom_content() if not self.download_system_item else self.build_system_content()
+        logger.debug("Existing 'build_pack_content' method")
+
+        if self.download_system_item:
+            logger.debug("Entering 'download_system_item' method")
+            self.build_system_content()
+            logger.debug("Existing 'download_system_item' method")
+
+        else:
+            logger.debug("Entering 'build_custom_content' method")
+            self.build_custom_content()
+            logger.debug("Existing 'build_custom_content' method")
+
+        logger.debug("Entering 'update_pack_hierarchy' method")
         self.update_pack_hierarchy()
+        logger.debug("Existing 'update_pack_hierarchy' method")
+
         self.merge_into_pack()
         self.log_files_downloaded()
         self.log_files_not_downloaded()
@@ -377,6 +398,7 @@ class Downloader:
         content_items_file_names_tuple: List[Tuple[str, str]] = []
 
         for file in tar.getmembers():
+            logger.debug(f"Looking for UUIDs in file '{file.name}'...")
             file_name: str = self.update_file_prefix(file.name.strip("/"))
             file_path: str = str(Path(self.custom_content_temp_dir, file_name))
 
@@ -393,6 +415,7 @@ class Downloader:
                     string_to_write, scripts_id_to_name, Path(file_name).suffix
                 )
             content_items_file_names_tuple.append((string_to_write, file.name))
+            logger.debug(f"Finished looking for UUIDs in file '{file.name}'.")
         return content_items_file_names_tuple, scripts_id_to_name
 
     def fetch_custom_content(self) -> bool:
@@ -569,12 +592,14 @@ class Downloader:
         custom_content_objects: List = list()
         for file_path in custom_content_file_paths:
             try:
+                logger.debug(f"Generating custom content object for '{file_path}'...")
                 custom_content_object: Dict = self.build_custom_content_object(
                     file_path
                 )
                 if custom_content_object["type"]:
                     # If custom content object's type is empty it means the file isn't of support content entity
                     custom_content_objects.append(custom_content_object)
+                logger.debug(f"Successfully generated custom content object for '{file_path}'")
             # Do not add file to custom_content_objects if it has an invalid format
             except ValueError as e:
                 logger.info(f"[red]Error when loading '{file_path}': {e}\nSkipping...[/red]")
@@ -710,6 +735,8 @@ class Downloader:
         For example check out the PACK_CONTENT variable in downloader_test.py
         """
         for content_entity_path in get_child_directories(self.output_pack_path):
+            logger.debug(f"Creating content objects for entities under '{content_entity_path}'...")
+
             raw_content_entity: str = os.path.basename(
                 os.path.normpath(content_entity_path)
             )
@@ -722,11 +749,15 @@ class Downloader:
             else:
                 entity_instances_paths = get_child_files(content_entity_path)
             for entity_instance_path in entity_instances_paths:
+                logger.debug(f"Creating object for '{entity_instance_path}'...")
                 content_object: dict = self.build_pack_content_object(
                     content_entity, entity_instance_path
                 )
                 if content_object:
                     self.pack_content[content_entity].append(content_object)
+                    logger.debug(f"Created object for '{entity_instance_path}' was successfully created.")
+
+            logger.debug(f"Finished creating objects for '{content_entity_path}'.")
 
     def build_pack_content_object(
         self, content_entity: str, entity_instance_path: str
@@ -852,11 +883,13 @@ class Downloader:
         Build a data structure called pack content that holds basic data for each content entity instances downloaded from Demisto.
         For example check out the CUSTOM_CONTENT variable in downloader_test.py
         """
-        custom_content_objects = (
-            self.all_custom_content_objects
-            if self.all_custom_content_objects
-            else self.get_custom_content_objects()
-        )
+        if self.all_custom_content_objects:
+            custom_content_objects = self.all_custom_content_objects
+
+        else:
+            logger.debug("Entering 'get_custom_content_objects' method...")
+            custom_content_objects = self.get_custom_content_objects()
+            logger.debug("Exited 'get_custom_content_objects' method.")
 
         for input_file_name in self.input_files:
             input_file_exist_in_cc: bool = False
