@@ -1303,14 +1303,14 @@ class ValidateManager:
                 f"\n[cyan]================= Running validation on old format files =================[/cyan]"
             )
             validation_results.add(self.validate_no_old_format(old_format_files))
-            logger.info(f"*** after adding validate_no_old_format")
+            logger.debug(f"*** added validate_no_old_format")
 
         if not self.skip_pack_rn_validation:
-            logger.info(f"*** adding validate_no_duplicated_release_notes")
+            logger.debug(f"*** adding validate_no_duplicated_release_notes")
             validation_results.add(
                 self.validate_no_duplicated_release_notes(added_files)
             )
-            logger.info(f"*** after adding validate_no_duplicated_release_notes")
+            logger.debug(f"*** added validate_no_duplicated_release_notes")
         if self.validate_graph:
             logger.info(
                 f"\n[cyan]================= Validating graph =================[/cyan]"
