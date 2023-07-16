@@ -342,8 +342,6 @@ class BaseUpdate:
         ):
             return  # nothing to set
         current_fromversion_value = self.data.get(self.from_version_key, "")
-        logger.info("Setting fromVersion field")
-
         if self.from_version:
             self.data[self.from_version_key] = self.from_version
         elif self.old_file.get(self.from_version_key):
@@ -390,7 +388,7 @@ class BaseUpdate:
         """Removes any _dev and _copy suffixes in the file.
         When developer clones playbook/integration/script it will automatically add _copy or _dev suffix.
         """
-        logger.info("Removing _dev and _copy suffixes from name, id and display tags")
+        logger.debug("Removing _dev and _copy suffixes from name, id and display tags")
         if self.data["name"]:
             self.data["name"] = (
                 self.data.get("name", "").replace("_copy", "").replace("_dev", "")
