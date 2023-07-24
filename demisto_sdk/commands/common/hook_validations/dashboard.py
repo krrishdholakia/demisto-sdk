@@ -9,11 +9,7 @@ from demisto_sdk.commands.common.logger import logger
 class DashboardValidator(ContentEntityValidator):
     @staticmethod
     def get_widgets_from_dashboard(dashboard) -> list:
-        layout_of_dashboard: list = dashboard.get("layout", [])
-        widgets = []
-        if layout_of_dashboard:
-            widgets = [item.get("widget") for item in layout_of_dashboard]
-        return widgets
+        return [item.get("widget") for item in dashboard.get("layout", [])]
 
     def is_valid_dashboard(self, validate_rn: bool = True) -> bool:
         """Check whether the dashboard is valid or not.
@@ -25,7 +21,7 @@ class DashboardValidator(ContentEntityValidator):
 
         # check only on added files
         if not self.old_file:
-            is_dashboard_valid = all([is_dashboard_valid, self.is_id_equals_name()])
+            is_dashboard_valid &= self.is_id_equals_name()
 
         return is_dashboard_valid
 
@@ -102,7 +98,7 @@ class DashboardValidator(ContentEntityValidator):
         """Return if root and inner widgets includes the necessary fields.
 
         Returns:
-            True if include, else False.
+            True if includes, else False.
         """
         error_msg = ""
         is_valid = True
@@ -140,3 +136,20 @@ class DashboardValidator(ContentEntityValidator):
         if error_msg:
             logger.error(f"[red]{error_msg}[/red]")
         return is_valid
+    
+    def is_date_range_valid(self) -> bool:
+        """Return if date range is valid.
+
+        Returns:
+            True if date range is valid, else False.
+        """
+        if period := self.current_file.get('period'):
+            date_range = (temp := 3)
+            if date_range > 60:
+                do_one = 1
+            elif date_range > 30:
+                do_two = 2
+            else:
+                return True
+
+        return True
