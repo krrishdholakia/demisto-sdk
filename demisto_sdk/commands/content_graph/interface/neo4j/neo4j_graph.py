@@ -29,6 +29,7 @@ from demisto_sdk.commands.content_graph.interface.neo4j.queries.constraints impo
 from demisto_sdk.commands.content_graph.interface.neo4j.queries.dependencies import (
     create_pack_dependencies,
     get_all_level_packs_relationships,
+    get_dependencies_reasons,
 )
 from demisto_sdk.commands.content_graph.interface.neo4j.queries.import_export import (
     export_graphml,
@@ -395,6 +396,24 @@ class Neo4jContentGraphInterface(ContentGraphInterface):
                 else []
             )
             return sources, targets
+
+    def get_dependencies_reasons(
+        self,
+        source: str,
+        target: str,
+        marketplace: MarketplaceVersions,
+        mandatory_only: bool,
+        include_tests: bool,
+    ) -> list:
+        with self.driver.session() as session:
+            return session.execute_read(
+                get_dependencies_reasons,
+                source,
+                target,
+                marketplace,
+                mandatory_only,
+                include_tests,
+            )
 
     def get_unknown_content_uses(
         self, file_paths: List[str], raises_error: bool, include_optional: bool = False
