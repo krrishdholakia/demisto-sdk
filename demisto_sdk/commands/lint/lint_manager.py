@@ -507,7 +507,7 @@ class LintManager:
                         )
                     )
 
-                logger.info("Waiting for futures to complete")
+                logger.debug("Waiting for futures to complete")
                 for i, future in enumerate(concurrent.futures.as_completed(results)):
                     logger.debug(f"checking output of future {i=}")
                     pkg_status = future.result()
@@ -532,7 +532,7 @@ class LintManager:
                             return_warning_code += pkg_status["warning_code"]
                     if pkg_status["pack_type"] not in pkgs_type:
                         pkgs_type.append(pkg_status["pack_type"])
-                logger.info("Finished all futures")
+                logger.debug("Finished all futures")
                 return return_exit_code, return_warning_code
         except KeyboardInterrupt:
             msg = "Stop demisto-sdk lint - Due to 'Ctrl C' signal"
@@ -545,6 +545,7 @@ class LintManager:
         except Exception as e:
             msg = f"Stop demisto-sdk lint - Due to Exception {e}"
             logger.error(f"[yellow]{msg}[/yellow]")
+            logger.debug(msg, exc_info=True)
 
             if Version(platform.python_version()) > Version("3.9"):
                 executor.shutdown(wait=True, cancel_futures=True)  # type: ignore[call-arg]

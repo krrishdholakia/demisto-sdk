@@ -71,9 +71,10 @@ def start_docker_MDX_server(
             auto_remove=True,
             ports={"6161/tcp": 6161},
         )
-    except Exception as error:
+    except Exception:
         logger.error(
-            f"Error occurred when trying to create {DEMISTO_DEPS_DOCKER_NAME} container", exc_info=True
+            f"Error occurred when trying to create {DEMISTO_DEPS_DOCKER_NAME} container",
+            exc_info=True,
         )
         logger.debug(
             f"all available containers: {[container.name for container in init_global_docker_client().containers.list(all=True)]}"
