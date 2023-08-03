@@ -346,10 +346,10 @@ class Downloader:
         self, content_items_file_names: List[Tuple[str, str]], scripts_id_to_name: dict
     ):
         for content_item_as_string, file_name in content_items_file_names:
-            if self.should_download_playbook(file_name):
-                content_item_as_string = self.download_playbook_yaml(
-                    content_item_as_string
-                )
+            # if self.should_download_playbook(file_name):
+            #     content_item_as_string = self.download_playbook_yaml(
+            #         content_item_as_string
+            #     )
             content_item_as_string = self.replace_uuids(
                 content_item_as_string, scripts_id_to_name, file_name
             )
