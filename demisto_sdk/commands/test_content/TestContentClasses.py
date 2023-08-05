@@ -1026,9 +1026,9 @@ class TestResults:
 
     def create_result_files(self):
         with open("./Tests/succeeded_tests.txt", "w") as succeeded_tests_file:
-            succeeded_tests_file.write("\n".join(self.succeeded_playbooks))
+            succeeded_tests_file.write("XXXXXXXXXXXXXXXX")
         with open("./Tests/failed_tests.txt", "w") as failed_tests_file:
-            failed_tests_file.write("\n".join(self.failed_playbooks))
+            failed_tests_file.write("KKKKKKKKKKKKKKK")
         with open("./Tests/skipped_tests.txt", "w") as skipped_tests_file:
             skipped_tests_file.write("\n".join(self.skipped_tests))
         with open("./Tests/skipped_integrations.txt", "w") as skipped_integrations_file:
