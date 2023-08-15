@@ -71,7 +71,7 @@ def get_all_level_packs_relationships(
 def create_pack_dependencies(tx: Transaction) -> None:
     remove_existing_depends_on_relationships(tx)
     update_uses_for_integration_commands(tx)
-    delete_deprecatedcontent_relationship(tx)  # TODO decide what to do with this
+    # delete_deprecatedcontent_relationship(tx)  # TODO decide what to do with this
     create_depends_on_relationships(tx)
 
 
