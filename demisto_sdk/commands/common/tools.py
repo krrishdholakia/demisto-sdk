@@ -292,11 +292,10 @@ def get_mp_tag_parser():
     return MARKETPLACE_TAG_PARSER
 
 
-def get_yml_paths_in_dir(project_dir: str | Path, error_msg: str = "") -> Tuple[list, str]:
+def get_yml_paths_in_dir(project_dir: str | Path) -> Tuple[list, str]:
     """
     Gets the project directory and returns the path of the first yml file in that directory
     :param project_dir: string path to the project_dir
-    :param error_msg: the error msg to show to the user in case not yml files found in the directory
     :return: first returned argument is the list of all yml files paths in the directory, second returned argument is a
     string path to the first yml file in project_dir
     """
@@ -305,9 +304,6 @@ def get_yml_paths_in_dir(project_dir: str | Path, error_msg: str = "") -> Tuple[
 
     if yml_files:
         return yml_files, yml_files[0]
-
-    if error_msg:
-        logger.info(error_msg)
 
     return [], ""
 
@@ -1810,7 +1806,7 @@ def find_type(
     ignore_sub_categories: bool = False,
     ignore_invalid_schema_file: bool = False,
     clear_cache: bool = False,
-) -> FileType | None:
+) -> Optional[FileType]:
     """
     returns the content file type
 
@@ -3528,23 +3524,23 @@ def get_display_name(file_path: str, file_data: dict | None = None) -> str:
             file_data = get_file(file_path)
 
     if "display" in file_data:
-        name = file_data.get("display")
+        return file_data.get("display")
     elif "layout" in file_data and isinstance(file_data["layout"], dict):
-        name = file_data["layout"].get("id")
+        return file_data["layout"].get("id")
     elif "name" in file_data:
-        name = file_data.get("name")
+        return file_data.get("name")
     elif "TypeName" in file_data:
-        name = file_data.get("TypeName")
+        return file_data.get("TypeName")
     elif "brandName" in file_data:
-        name = file_data.get("brandName")
+        return file_data.get("brandName")
     elif "reputationCommand" in file_data:
-        name = file_data.get("details")
+        return file_data.get("details")
     elif "id" in file_data:
-        name = file_data.get("id")
+        return file_data.get("id")
     elif "trigger_name" in file_data:
-        name = file_data.get("trigger_name")
+        return file_data.get("trigger_name")
     elif "rule_name" in file_data:
-        name = file_data.get("rule_name")
+        return file_data.get("rule_name")
 
     elif (
         "dashboards_data" in file_data
@@ -3552,7 +3548,7 @@ def get_display_name(file_path: str, file_data: dict | None = None) -> str:
         and isinstance(file_data["dashboards_data"], list)
     ):
         dashboard_data = file_data.get("dashboards_data", [{}])[0]
-        name = dashboard_data.get("name")
+        return dashboard_data.get("name")
 
     elif (
         "templates_data" in file_data
@@ -3560,11 +3556,10 @@ def get_display_name(file_path: str, file_data: dict | None = None) -> str:
         and isinstance(file_data["templates_data"], list)
     ):
         r_name = file_data.get("templates_data", [{}])[0]
-        name = r_name.get("report_name")
+        return r_name.get("report_name")
 
     else:
-        name = os.path.basename(file_path)
-    return name
+        return os.path.basename(file_path)
 
 
 def get_invalid_incident_fields_from_mapper(
