@@ -9,7 +9,8 @@ import pytest
 import requests
 from freezegun import freeze_time
 
-from demisto_sdk.commands.common.handlers import JSON_Handler
+from demisto_sdk.commands.common.constants import TEST_COVERAGE_DEFAULT_URL
+from demisto_sdk.commands.common.handlers import DEFAULT_JSON_HANDLER as json
 from demisto_sdk.commands.common.logger import logging_setup
 from demisto_sdk.commands.coverage_analyze.helpers import (
     CoverageSummary,
@@ -23,9 +24,6 @@ from demisto_sdk.commands.coverage_analyze.helpers import (
     percent_to_float,
 )
 from TestSuite.test_tools import str_in_call_args_list
-
-json = JSON_Handler()
-
 
 TEST_DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 JSON_MIN_DATA_FILE = os.path.join(TEST_DATA_DIR, "coverage-min.json")
@@ -170,7 +168,7 @@ class TestExportReport:
 
 class TestCoverageSummary:
     class TestGetFilesSummary:
-        default_url = "https://storage.googleapis.com/marketplace-dist-dev/code-coverage-reports/coverage-min.json"
+        default_url = TEST_COVERAGE_DEFAULT_URL
 
         @staticmethod
         def check_get_files(cache_dir, mock_min_cov_request, request_count):

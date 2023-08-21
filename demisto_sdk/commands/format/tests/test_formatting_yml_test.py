@@ -18,7 +18,7 @@ from demisto_sdk.commands.common.constants import (
     NO_TESTS_DEPRECATED,
     MarketplaceVersions,
 )
-from demisto_sdk.commands.common.handlers import YAML_Handler
+from demisto_sdk.commands.common.handlers import DEFAULT_YAML_HANDLER as yaml
 from demisto_sdk.commands.common.hook_validations.docker import DockerImageValidator
 from demisto_sdk.commands.common.hook_validations.integration import (
     IntegrationValidator,
@@ -67,8 +67,6 @@ from TestSuite.pack import Pack
 from TestSuite.playbook import Playbook
 from TestSuite.repo import Repo
 from TestSuite.test_tools import ChangeCWD, str_in_call_args_list
-
-yaml = YAML_Handler()
 
 INTEGRATION_TEST_ARGS = (
     SOURCE_FORMAT_INTEGRATION_COPY,
@@ -268,7 +266,7 @@ class TestFormatting:
         )
         base_yml.save_yml_to_destination_file()
         assert os.path.isfile(saved_file_path)
-        os.remove(saved_file_path)
+        Path(saved_file_path).unlink()
 
     INTEGRATION_PROXY_SSL_PACK = [
         (
@@ -564,7 +562,7 @@ class TestFormatting:
         with open(saved_file_path) as f:
             yaml_content = yaml.load(f)
             assert "yes" in yaml_content["tasks"]["27"]["nexttasks"]
-        os.remove(saved_file_path)
+        Path(saved_file_path).unlink()
 
     FORMAT_FILES = [
         (SOURCE_FORMAT_PLAYBOOK, DESTINATION_FORMAT_PLAYBOOK, PLAYBOOK_PATH, 0)
@@ -581,7 +579,7 @@ class TestFormatting:
         os.makedirs(path, exist_ok=True)
         shutil.copyfile(source, target)
         res = format_manager(input=target, output=target)
-        os.remove(target)
+        Path(target).unlink()
         os.rmdir(path)
 
         assert res is answer
@@ -779,7 +777,7 @@ class TestFormatting:
                     param.pop("defaultvalue")
             for param in INCIDENT_FETCH_REQUIRED_PARAMS:
                 assert param in yaml_content["configuration"]
-        os.remove(target)
+        Path(target).unlink()
         os.rmdir(path)
         assert res is answer
 
@@ -830,7 +828,7 @@ class TestFormatting:
                 param.update(param_details.get("must_equal", dict()))
                 param.update(param_details.get("must_contain", dict()))
                 assert param in params
-        os.remove(target)
+        Path(target).unlink()
         os.rmdir(path)
         assert res is answer
 
@@ -965,7 +963,7 @@ class TestFormatting:
         res = formatter.run_format()
         assert res == 0
         assert formatter.data.get("fromversion") == GENERAL_DEFAULT_FROMVERSION
-        os.remove(DESTINATION_FORMAT_TEST_PLAYBOOK)
+        Path(DESTINATION_FORMAT_TEST_PLAYBOOK).unlink()
         os.rmdir(TEST_PLAYBOOK_PATH)
 
     @pytest.mark.parametrize(

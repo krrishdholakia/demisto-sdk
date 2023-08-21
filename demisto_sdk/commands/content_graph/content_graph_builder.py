@@ -3,13 +3,11 @@ from typing import List, Optional
 
 import more_itertools
 
-from demisto_sdk.commands.common.handlers import JSON_Handler
 from demisto_sdk.commands.content_graph.common import Nodes, Relationships
 from demisto_sdk.commands.content_graph.interface.graph import ContentGraphInterface
 from demisto_sdk.commands.content_graph.objects.repository import ContentDTO
 from demisto_sdk.commands.content_graph.parsers.repository import RepositoryParser
 
-json = JSON_Handler()
 PACKS_PER_BATCH = 50
 
 
@@ -88,4 +86,4 @@ class ContentGraphBuilder:
         """Runs DB queries using the collected nodes and relationships to create or update the content graph."""
         self.content_graph.create_nodes(self.nodes)
         self.content_graph.create_relationships(self.relationships)
-        self.content_graph.remove_server_items()
+        self.content_graph.remove_non_repo_items()

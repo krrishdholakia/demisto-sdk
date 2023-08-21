@@ -3,6 +3,7 @@ import os
 import shutil
 from configparser import ConfigParser
 from pathlib import Path
+from tempfile import NamedTemporaryFile, TemporaryDirectory
 from typing import Callable, List, Optional, Tuple, Union
 
 import git
@@ -39,7 +40,8 @@ from demisto_sdk.commands.common.git_content_config import (
     GitCredentials,
 )
 from demisto_sdk.commands.common.git_util import GitUtil
-from demisto_sdk.commands.common.handlers import JSON_Handler, YAML_Handler
+from demisto_sdk.commands.common.handlers import DEFAULT_JSON_HANDLER as json
+from demisto_sdk.commands.common.handlers import DEFAULT_YAML_HANDLER as yaml
 from demisto_sdk.commands.common.legacy_git_tools import git_path
 from demisto_sdk.commands.common.tools import (
     MarketplaceTagParser,
@@ -72,6 +74,7 @@ from demisto_sdk.commands.common.tools import (
     get_latest_release_notes_text,
     get_marketplace_to_core_packs,
     get_pack_metadata,
+    get_pack_names_from_files,
     get_relative_path_from_packs_dir,
     get_release_note_entries,
     get_release_notes_file_path,
@@ -80,6 +83,7 @@ from demisto_sdk.commands.common.tools import (
     get_to_version,
     get_yaml,
     has_remote_configured,
+    is_content_item_dependent_in_conf,
     is_object_in_id_set,
     is_origin_content_repo,
     is_pack_path,
@@ -87,6 +91,7 @@ from demisto_sdk.commands.common.tools import (
     parse_multiple_path_inputs,
     retrieve_file_ending,
     run_command_os,
+    search_and_delete_from_conf,
     server_version_compare,
     str2bool,
     string_to_bool,
@@ -129,8 +134,7 @@ from TestSuite.repo import Repo
 from TestSuite.test_tools import ChangeCWD
 
 GIT_ROOT = git_path()
-yaml = YAML_Handler()
-json = JSON_Handler()
+
 
 SENTENCE_WITH_UMLAUTS = "Nett hier. Aber waren Sie schon mal in Baden-Württemberg?"
 
@@ -251,7 +255,7 @@ class TestGenericFunctions:
             )
         )
         assert "ü" in path.read_text(encoding="latin-1")
-        assert get_file(path, suffix) == {"text": SENTENCE_WITH_UMLAUTS}
+        assert get_file(path) == {"text": SENTENCE_WITH_UMLAUTS}
 
     @pytest.mark.parametrize(
         "file_name, prefix, result",
@@ -903,8 +907,7 @@ def test_get_ignore_pack_tests__no_ignore_pack(tmpdir):
     pack_ignore_path = os.path.join(pack.path, PACKS_PACK_IGNORE_FILE_NAME)
 
     # remove .pack-ignore if exists
-    if os.path.exists(pack_ignore_path):
-        os.remove(pack_ignore_path)
+    Path(pack_ignore_path).unlink(missing_ok=True)
 
     ignore_test_set = get_ignore_pack_skipped_tests(
         fake_pack_name, {fake_pack_name}, {}
@@ -1461,7 +1464,6 @@ def test_get_pack_metadata(repo):
     assert metadata_json == result
 
 
-@pytest.mark.skip
 def test_get_last_remote_release_version(requests_mock):
     """
     When
@@ -2524,73 +2526,25 @@ def test_get_display_name(data, answer, tmpdir):
     assert get_display_name(file.path) == answer
 
 
-@pytest.mark.parametrize("value", ("true", "True"))
-def test_string_to_bool__default_params__true(value: str):
+@pytest.mark.parametrize("value", ("true", "True", 1, "1", "yes", "y"))
+def test_string_to_bool_true(value: str):
     assert string_to_bool(value)
 
 
-@pytest.mark.parametrize("value", ("false", "False"))
-def test_string_to_bool__default_params__false(value: str):
+@pytest.mark.parametrize("value", ("", None))
+def test_string_to_bool_default_true(value: str):
+    assert string_to_bool(value, True)
+
+
+@pytest.mark.parametrize("value", ("false", "False", 0, "0", "n", "no"))
+def test_string_to_bool_false(value: str):
     assert not string_to_bool(value)
 
 
-@pytest.mark.parametrize("value", ("1", 1, "", " ", "כן", None, "None"))
-def test_string_to_bool__default_params__error(value: str):
+@pytest.mark.parametrize("value", ("", " ", "כן", None, "None"))
+def test_string_to_bool_error(value: str):
     with pytest.raises(ValueError):
         string_to_bool(value)
-
-
-@pytest.mark.parametrize(
-    "value", ("true", "True", "TRUE", "t", "T", "yes", "Yes", "YES", "y", "Y", "1")
-)
-def test_string_to_bool__all_params_true__true(value: str):
-    assert string_to_bool(value, True, True, True, True, True, True)
-
-
-@pytest.mark.parametrize(
-    "value", ("false", "False", "FALSE", "f", "F", "no", "No", "NO", "n", "N", "0")
-)
-def test_string_to_bool__all_params_true__false(value: str):
-    assert not string_to_bool(value, True, True, True, True, True, True)
-
-
-@pytest.mark.parametrize(
-    "value",
-    (
-        "true",
-        "True",
-        "TRUE",
-        "t",
-        "T",
-        "yes",
-        "Yes",
-        "YES",
-        "y",
-        "Y",
-        "1",
-        "false",
-        "False",
-        "FALSE",
-        "f",
-        "F",
-        "no",
-        "No",
-        "NO",
-        "n",
-        "N",
-        "0",
-        "",
-        " ",
-        1,
-        True,
-        None,
-        "אולי",
-        "None",
-    ),
-)
-def test_string_to_bool__all_params_false__error(value: str):
-    with pytest.raises(ValueError):
-        assert string_to_bool(value, False, False, False, False, False, False)
 
 
 @pytest.mark.parametrize(
@@ -2806,3 +2760,346 @@ def test_parse_multiple_path_inputs_error(input_paths):
     """
     with pytest.raises(ValueError, match=f"Cannot parse paths from {input_paths}"):
         parse_multiple_path_inputs(input_paths)
+
+
+@pytest.mark.parametrize(
+    "content_item_id, file_type, test_playbooks, no_test_playbooks_explicitly, expected_test_list",
+    [
+        (
+            "PagerDuty v2",
+            "integration",
+            ["No tests"],
+            True,
+            [
+                {"integrations": ["PagerDuty v1"], "playbookID": "PagerDutyV1 Test"},
+                {"integrations": ["PagerDuty v1"], "playbookID": "PagerDuty Test"},
+                {
+                    "integrations": "Account Enrichment",
+                    "playbookID": "Account Enrichment Test",
+                },
+                {
+                    "integrations": "TestCreateDuplicates",
+                    "playbookID": "TestCreateDuplicates Test",
+                },
+            ],
+        ),
+        (
+            "PagerDuty v2",
+            "integration",
+            ["PagerDutyV2 Test"],
+            False,
+            [
+                {"integrations": ["PagerDuty v1"], "playbookID": "PagerDutyV1 Test"},
+                {"integrations": ["PagerDuty v1"], "playbookID": "PagerDuty Test"},
+                {
+                    "integrations": "Account Enrichment",
+                    "playbookID": "Account Enrichment Test",
+                },
+                {
+                    "integrations": "TestCreateDuplicates",
+                    "playbookID": "TestCreateDuplicates Test",
+                },
+            ],
+        ),
+        (
+            "Account Enrichment",
+            "integration",
+            ["No tests"],
+            False,
+            [
+                {"integrations": ["PagerDuty v1"], "playbookID": "PagerDutyV1 Test"},
+                {
+                    "integrations": ["PagerDuty v1", "PagerDuty v2"],
+                    "playbookID": "PagerDuty Test",
+                },
+                {"integrations": "PagerDuty v2", "playbookID": "PagerDutyV2 Test"},
+                {"integrations": "PagerDuty v2", "playbookID": "PagerDutyV2 Test"},
+                {
+                    "integrations": "TestCreateDuplicates",
+                    "playbookID": "TestCreateDuplicates Test",
+                },
+            ],
+        ),
+        (
+            "Account Enrichment Test",
+            "playbook",
+            ["No tests"],
+            False,
+            [
+                {"integrations": ["PagerDuty v1"], "playbookID": "PagerDutyV1 Test"},
+                {
+                    "integrations": ["PagerDuty v1", "PagerDuty v2"],
+                    "playbookID": "PagerDuty Test",
+                },
+                {"integrations": "PagerDuty v2", "playbookID": "PagerDutyV2 Test"},
+                {"integrations": "PagerDuty v2", "playbookID": "PagerDutyV2 Test"},
+                {
+                    "integrations": "TestCreateDuplicates",
+                    "playbookID": "TestCreateDuplicates Test",
+                },
+            ],
+        ),
+    ],
+)
+def test_search_and_delete_from_conf(
+    content_item_id,
+    file_type,
+    test_playbooks,
+    no_test_playbooks_explicitly,
+    expected_test_list,
+):
+    """
+    Given:
+          content_item_id, file_type, test_playbooks, no_test_playbooks_explicitly
+        - Case A: PagerDuty v2 integration without tests.
+        - Case B: PagerDuty v2 integration with tests.
+        - Case C: Account Enrichment integration without tests.
+        - Case D: Account Enrichment playbook without tests.
+
+    When:
+        - check that the test_search_and_delete_from_conf works as expected.
+
+    Then:
+        - Case A: Delete PagerDuty v2 integration.
+        - Case B: Delete PagerDuty v2 integration.
+        - Case C: Delete Account Enrichment integration.
+        - Case D: Delete Account Enrichment integration.
+    """
+    CONF_JSON_ORIGINAL_CONTENT = {
+        "tests": [
+            {"integrations": ["PagerDuty v1"], "playbookID": "PagerDutyV1 Test"},
+            {
+                "integrations": ["PagerDuty v1", "PagerDuty v2"],
+                "playbookID": "PagerDuty Test",
+            },
+            {"integrations": "PagerDuty v2", "playbookID": "PagerDutyV2 Test"},
+            {"integrations": "PagerDuty v2", "playbookID": "PagerDutyV2 Test"},
+            {
+                "integrations": "Account Enrichment",
+                "playbookID": "Account Enrichment Test",
+            },
+            {
+                "integrations": "TestCreateDuplicates",
+                "playbookID": "TestCreateDuplicates Test",
+            },
+        ]
+    }
+    conf_test = search_and_delete_from_conf(
+        CONF_JSON_ORIGINAL_CONTENT["tests"],
+        content_item_id,
+        file_type,
+        test_playbooks,
+        no_test_playbooks_explicitly,
+    )
+    assert conf_test == expected_test_list
+
+
+@pytest.mark.parametrize(
+    "test_config, file_type, expected_result",
+    [
+        (
+            {"integrations": "PagerDuty v2", "playbookID": "PagerDutyV2 Test"},
+            "integration",
+            False,
+        ),
+        (
+            {"integrations": ["PagerDuty v2"], "playbookID": "PagerDutyV2 Test"},
+            "integration",
+            False,
+        ),
+        (
+            {
+                "integrations": ["PagerDuty v2", "PagerDuty v3"],
+                "playbookID": "PagerDuty Test",
+            },
+            "playbook",
+            False,
+        ),
+        (
+            {
+                "integrations": ["PagerDuty v2", "PagerDuty v3"],
+                "playbookID": "PagerDuty Test",
+            },
+            "integration",
+            True,
+        ),
+    ],
+)
+def test_is_content_item_dependent_in_conf(test_config, file_type, expected_result):
+    """
+    Given:
+          test_config - A line from the conf.json and file_type.
+        - Case A: test_config with a string in the "integrations" key and integration file type.
+        - Case B: test_config with an array with len 1 in the "integrations" key and playbook file type.
+        - Case C: test_config with an array with len 2 in the "integrations" key and testplaybook file type.
+        - Case D: test_config with an array in the "integrations" key and integration file type.
+
+    When:
+        - check that the is_content_item_dependent_in_conf works as expected.
+
+    Then:
+        - Ensure that the result in correct.
+    """
+    result = is_content_item_dependent_in_conf(test_config, file_type)
+    assert result == expected_result
+
+
+@pytest.mark.parametrize(
+    "file_paths, skip_file_types, expected_packs",
+    [
+        (
+            [
+                "Packs/PackA/pack_metadata.json",
+                "Tests/scripts/infrastructure_tests/tests_data/collect_tests/R/Packs/PackB/pack_metadata.json",
+            ],
+            None,
+            {"PackA"},
+        ),
+        (
+            [("Packs/PackA/pack_metadata.json", "Packs/PackB/pack_metadata.json")],
+            None,
+            {"PackB"},
+        ),
+        (
+            ["Packs/PackA/pack_metadata.json", "Packs/PackB/ReleaseNotes/1_0_0.md"],
+            {FileType.RELEASE_NOTES},
+            {"PackA"},
+        ),
+    ],
+)
+def test_get_pack_names_from_files(file_paths, skip_file_types, expected_packs):
+    """
+    Given:
+        - Case A: Real packs paths and infra file paths.
+        - Case B: File paths in tuple.
+        - Case C: File paths and file types to skip.
+
+    When:
+        - Running get_pack_names_from_files.
+
+    Then:
+        - Ensure that the result is as expected.
+    """
+    packs_result = get_pack_names_from_files(file_paths, skip_file_types)
+    assert packs_result == expected_packs
+
+
+@pytest.mark.parametrize(
+    "file_name, expected_hash",
+    [
+        ("file.txt", "c8c54e11b1cb27c3376fa82520d53ef9932a02c0"),
+        ("file2.txt", "f1e01f0882e1f08f00f38d0cd60a850dc9288188"),
+    ],
+)
+def test_sha1_file(file_name, expected_hash):
+    """
+    Given:
+        - A file path
+    When:
+        - Checking the hash
+    Then:
+        Validate that the hash is correct, even after moving to a different location
+    """
+    path_str = f"{GIT_ROOT}/demisto_sdk/commands/common/tests/test_files/test_sha1/content/{file_name}"
+    assert tools.sha1_file(path_str) == expected_hash
+    assert tools.sha1_file(Path(path_str)) == expected_hash
+    # move file to a different location and check that the hash is still the same
+    with NamedTemporaryFile() as temp_dir:
+        shutil.copy(path_str, temp_dir.name)
+        assert tools.sha1_file(temp_dir.name) == expected_hash
+
+
+def test_sha1_dir():
+    """
+    Given:
+        - A directory path
+    When:
+        - Checking the hash
+    Then:
+        Validate that the hash is correct, even after moving to a different location
+    """
+    path_str = f"{GIT_ROOT}/demisto_sdk/commands/common/tests/test_files/test_sha1"
+    expected_hash = "70feabcd73ccbcb14201453942edf4a5fb4c4aac"
+    assert tools.sha1_dir(path_str) == expected_hash
+    assert tools.sha1_dir(Path(path_str)) == expected_hash
+    # move dir to a different location and check that the hash is still the same
+    with TemporaryDirectory() as temp_dir:
+        dest = Path(temp_dir, "dest")
+        shutil.copytree(path_str, dest)
+        assert tools.sha1_dir(dest) == expected_hash
+
+
+@pytest.mark.parametrize(
+    "input_path,expected_output",
+    [
+        (
+            Path("root/Packs/MyPack/Integrations/MyIntegration/MyIntegration.yml"),
+            "root/Packs/MyPack",
+        ),
+        (Path("Packs/MyPack1/Scripts/MyScript/MyScript.py"), "Packs/MyPack1"),
+        (Path("Packs/MyPack2/Scripts/MyScript"), "Packs/MyPack2"),
+        (Path("Packs/MyPack3/Scripts"), "Packs/MyPack3"),
+        (Path("Packs/MyPack4"), "Packs/MyPack4"),
+    ],
+)
+def test_find_pack_folder(input_path, expected_output):
+    output = tools.find_pack_folder(input_path)
+    assert expected_output == str(output)
+
+
+@pytest.mark.parametrize(
+    "input_path, expected_output",
+    [
+        (
+            Path(
+                "/User/username/content/Packs/MyPack/Integrations/MyIntegration/MyIntegration.yml"
+            ),
+            Path("/User/username/content"),
+        ),
+        (Path("/User/username/content/Packs"), Path("/User/username/content")),
+    ],
+)
+def test_get_content_path(input_path, expected_output):
+    """
+    Given:
+        - A path to a file or directory in the content repo
+    When:
+        - Running get_content_path
+    Then:
+        Validate that the given path is correct
+    """
+    assert tools.get_content_path(input_path) == expected_output
+
+
+@pytest.mark.parametrize(
+    "string, expected_result",
+    [
+        ("1", True),
+        ("12345678", True),
+        ("1689889076", True),
+        ("1626858896", True),
+        ("d", False),
+        ("123d", False),
+        ("123d", False),
+        ("2023-07-21T12:34:56Z", False),
+        ("07/21/23", False),
+        ("21 July 2023", False),
+        ("Thu, 21 Jul 2023 12:34:56 +0000", False),
+    ],
+)
+def test_is_epoch_datetime(string: str, expected_result: bool):
+    """
+    Given:
+          test_config - A line from the conf.json and file_type.
+        - Case A + B + C + D: valid epoch_datetime
+        - Case E + F + G + H + I + J + K: ivalid epoch datetime
+
+    When:
+        - run test_is_epoch_datetime
+
+    Then:
+        - Ensure that the result in correct.
+    """
+    from demisto_sdk.commands.common.tools import is_epoch_datetime
+
+    assert is_epoch_datetime(string) == expected_result
