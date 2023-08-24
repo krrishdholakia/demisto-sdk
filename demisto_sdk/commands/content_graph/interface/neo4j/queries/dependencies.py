@@ -179,3 +179,46 @@ RETURN
     ).exists():
         with open(f"{artifacts_folder}/depends_on.json", "w") as fp:
             json.dump(outputs, fp, indent=4)
+
+
+def get_dependencies_reasons(
+    tx: Transaction,
+    source: str,
+    target: str,
+    marketplace: MarketplaceVersions,
+    mandatory_only: bool,
+    include_tests: bool,
+) -> list:
+    query = f"""// Returns all USES relationships expanding from items in source pack to items in target pack.
+MATCH (s:{ContentType.PACK}{{object_id: "{source}"}})
+MATCH (t:{ContentType.PACK}{{object_id: "{target}"}})
+CALL apoc.path.expandConfig(s, {{
+    relationshipFilter: "{RelationshipType.USES}>|{RelationshipType.IN_PACK}",
+    labelFilter: "-{ContentType.COMMAND}",
+    terminatorNodes: [t],
+    uniqueness: "NODE_PATH",
+    limit: 10  // todo: configurable?
+}})
+YIELD path
+WITH
+    [n IN nodes(path) | n.path] AS node_paths,
+    nodes(path) AS nodes,
+    [r IN relationships(path) | properties(r)] AS rels,
+    CASE WHEN length(path) = 3 THEN TRUE ELSE FALSE END AS is_direct // 3 = 1 #USES + 2 #IN_PACK
+WITH
+    nodes,
+    nodes[-1] AS target,
+    apoc.coll.flatten((apoc.coll.zip(node_paths[..-1], rels))) AS path_to_target,
+    CASE WHEN all(r IN rels[1..-1] WHERE r.mandatorily) THEN TRUE ELSE
+    CASE WHEN any(r IN rels[1..-1] WHERE r.mandatorily IS NOT NULL) THEN FALSE END END AS mandatorily,
+    is_direct,
+    CASE WHEN any(r IN rels[1..-1] WHERE r.is_test) THEN TRUE ELSE FALSE END AS is_test
+WHERE
+    all(n IN nodes WHERE "{marketplace}" IN n.marketplaces)
+    {"AND NOT is_test" if not include_tests else ""}
+    {"AND mandatorily" if mandatory_only else ""}
+RETURN
+    apoc.coll.insert(path_to_target, size(path_to_target), target.path)[2..-2] AS path, // remove first and last nodes + rels
+    mandatorily,
+    is_direct"""
+    return run_query(tx, query).data()

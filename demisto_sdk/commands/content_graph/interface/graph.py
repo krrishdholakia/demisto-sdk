@@ -182,6 +182,17 @@ class ContentGraphInterface(ABC):
         pass
 
     @abstractmethod
+    def get_dependencies_reasons(
+        self,
+        source: str,
+        target: str,
+        marketplace: MarketplaceVersions,
+        mandatory_only: bool,
+        include_tests: bool,
+    ) -> list:
+        pass
+
+    @abstractmethod
     def search(
         self,
         marketplace: MarketplaceVersions = None,
