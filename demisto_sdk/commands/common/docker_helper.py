@@ -70,7 +70,7 @@ def init_global_docker_client(timeout: int = 60, log_prompt: str = ""):
                 DOCKER_CLIENT.login(
                     username=docker_user,
                     password=docker_pass,
-                    registry="https://index.docker.io/v1",
+                    registry="https://registry.hub.docker.com/v2",
                 )
             except Exception:
                 logger.exception(f"{log_prompt} - failed to login to docker registry")
