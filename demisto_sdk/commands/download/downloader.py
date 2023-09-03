@@ -521,12 +521,13 @@ class Downloader:
         logger.debug(f"'{len(downloaded_playbooks)}' system playbooks were downloaded successfully.")
         return downloaded_playbooks
 
-    def build_file_name(self, content_item: dict, content_item_type: str) -> str:
+    def generate_content_file_name(self, content_item: dict, content_item_type: str) -> str:
         item_name: str = content_item.get("name") or content_item.get("id")
-        return (
-            item_name.replace("/", "_").replace(" ", "_")
-            + ITEM_TYPE_TO_PREFIX[content_item_type]
-        )
+        result = (item_name.replace("/", "_").replace(" ", "_") +
+                  ITEM_TYPE_TO_PREFIX[content_item_type])
+
+        # Remove duplicate underscores
+        return re.sub(r"_{2,}", "_", result)
 
     def fetch_system_content(self) -> dict[str, dict]:
         """
@@ -570,7 +571,8 @@ class Downloader:
         content_objects: dict[str, dict] = {}
 
         for content_item in downloaded_items:
-            file_name = self.build_file_name(content_item=content_item, content_item_type=self.system_item_type)
+            file_name = self.generate_content_file_name(content_item=content_item,
+                                                        content_item_type=self.system_item_type)
             file_data = create_stringio_object(file_data=json.dumps(content_item))
             content_object = self.create_content_item_object(file_name=file_name,
                                                              file_data=file_data,
@@ -684,7 +686,7 @@ class Downloader:
             self.remove_empty_folders(pack_folder=root_folder)
 
         logger.info(f"Pack structure initialized at '{root_folder}'.")
-        return initiator.full_output_path
+        return Path(initiator.full_output_path)
 
     def remove_empty_folders(self, pack_folder: Path) -> None:
         """

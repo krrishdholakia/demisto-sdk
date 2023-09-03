@@ -106,11 +106,13 @@ class Environment:
         tests_path = self.tmp_path / "tests"
         tests_env_path = tests_path / "tests_env"
         tests_data_path = tests_path / "tests_data"
+
         shutil.copytree(
-            src="demisto_sdk/commands/download/tests/tests_env", dst=str(tests_env_path)
+            src=TEST_DATA_FOLDER / "tests_env",
+            dst=str(tests_env_path),
         )
         shutil.copytree(
-            src="demisto_sdk/commands/download/tests/tests_data",
+            src=TEST_DATA_FOLDER / "tests_env",
             dst=str(tests_data_path),
         )
 
@@ -514,57 +516,15 @@ class TestFlagHandlers:
             builtins, "input", side_effect=("test_pack_name", "n", "n")
         )
 
-        downloader = Downloader(env.CONTENT_BASE_PATH, "")
-        downloader.init = True
-        downloader.initialize_output_path()
+        downloader = Downloader(init=True)
+        result_path = downloader.initialize_output_path(root_folder=Path(env.CONTENT_BASE_PATH))
 
         assert mock.call_count == 3
-        assert downloader.output_pack_path == str(
-            Path(env.CONTENT_BASE_PATH) / "Packs" / "test_pack_name"
-        )
-        assert Path(downloader.output_pack_path, "pack_metadata.json").exists()
-        assert not Path(downloader.output_pack_path, "Integrations").exists()
-        for file in Path(downloader.output_pack_path).iterdir():
+        assert str(result_path) == str(Path(env.CONTENT_BASE_PATH) / "Packs/test_pack_name")
+        assert (result_path / "pack_metadata.json").exists()
+        assert not Path(result_path / "Integrations").exists()
+        for file in result_path.iterdir():
             assert not file.is_dir()
-
-    def test_handle_list_files_flag(self, tmp_path, mocker):
-        logger_info = mocker.patch.object(logging.getLogger("demisto-sdk"), "info")
-        env = Environment(tmp_path)
-        with patch.object(Downloader, "__init__", lambda a, b, c: None):
-            downloader = Downloader("", "")
-            downloader.custom_content_temp_dir = env.CUSTOM_CONTENT_BASE_PATH
-            downloader.list_files = True
-            answer = downloader.create_custom_content_table()
-            list_files = [[cco["name"], cco["type"]] for cco in env.CUSTOM_CONTENT]
-            for file in list_files:
-                assert all(
-                    [
-                        str_in_call_args_list(logger_info.call_args_list, file[0]),
-                        str_in_call_args_list(logger_info.call_args_list, file[1]),
-                    ]
-                )
-            assert answer
-
-    def test_handle_list_files_flag_error(self, mocker, tmp_path):
-        """
-        GIVEN a file contained in custom content of not supported type
-        WHEN the user runs demisto-sdk download -lf
-        THEN the create_custom_content_table method should ignore the file
-        """
-        env = Environment(tmp_path)
-        mocker.patch(
-            "demisto_sdk.commands.download.downloader.get_dict_from_file",
-            return_value=({}, "json"),
-        )
-        mocker.patch(
-            "demisto_sdk.commands.download.downloader.get_child_files",
-            return_value=["path"],
-        )
-        with patch.object(Downloader, "__init__", lambda a, b, c: None):
-            downloader = Downloader("", "")
-            downloader.custom_content_temp_dir = env.INTEGRATION_INSTANCE_PATH
-            downloader.list_files = True
-            assert downloader.create_custom_content_table()
 
 
 class TestBuildPackContent:
@@ -1034,17 +994,16 @@ class TestVerifyPackPath:
     def test_verify_output_path_is_pack(self, tmp_path, output_path, valid_ans):
         env = Environment(tmp_path)
         downloader = Downloader(
-            output=f"{env.CONTENT_BASE_PATH}/{output_path}", input="", regex=""
+            output=f"{env.CONTENT_BASE_PATH}/{output_path}"
         )
         assert downloader.verify_output_path() is valid_ans
 
 
 @pytest.mark.parametrize(
-    "input, system, it, insecure, endpoint, req_type, req_body",
+    "input, it, insecure, endpoint, req_type, req_body",
     [
         (
             ["PB1", "PB2"],
-            True,
             "Playbook",
             False,
             "/playbook/search",
@@ -1053,17 +1012,15 @@ class TestVerifyPackPath:
         ),
         (
             ["Mapper1", "Mapper2"],
-            True,
             "Mapper",
             True,
             "/classifier/search",
             "POST",
             {"query": "name:Mapper1 or Mapper2"},
         ),
-        (["Field1", "Field2"], True, "Field", True, "/incidentfields", "GET", {}),
+        (["Field1", "Field2"], "Field", True, "/incidentfields", "GET", {}),
         (
             ["Classifier1", "Classifier2"],
-            True,
             "Classifier",
             False,
             "/classifier/search",
@@ -1073,12 +1030,12 @@ class TestVerifyPackPath:
     ],
 )
 def test_build_req_params(
-    input, system, it, insecure, endpoint, req_type, req_body, monkeypatch
+    input, it, insecure, endpoint, req_type, req_body, monkeypatch
 ):
     with patch.object(Downloader, "__init__", lambda x, y, z: None):
         monkeypatch.setenv("DEMISTO_BASE_URL", "http://demisto.instance.com:8080/")
         monkeypatch.setenv("DEMISTO_API_KEY", "API_KEY")
-        downloader = Downloader("", "")
+        downloader = Downloader(system=True)
         downloader.system_item_type = it
         downloader.insecure = insecure
         downloader.input_files = input
@@ -1088,80 +1045,22 @@ def test_build_req_params(
         assert req_body == res_req_body
 
 
-def test_build_file_name():
-    with patch.object(Downloader, "__init__", lambda x, y, z: None):
-        downloader = Downloader("", "")
-
-        downloader.system_item_type = "Playbook"
-        file_name = downloader.build_file_name({"name": "name 1", "id": "id"})
-        assert file_name == "name_1.yml"
-
-        downloader.system_item_type = "Field"
-        file_name = downloader.build_file_name({"name": "name 1", "id": "id"})
-        assert file_name == "name_1.json"
-
-        downloader.system_item_type = "Field"
-        file_name = downloader.build_file_name({"id": "id 1"})
-        assert file_name == "id_1.json"
-
-
 @pytest.mark.parametrize(
-    "original_string, object_name, expected_string, should_download_expected_res",
+    "content_item, content_type, expected_result",
     [
-        (
-            "name: TestingScript\ncommonfields:\n id: f1e4c6e5-0d44-48a0-8020-a9711243e918",
-            "automation-Testing.yml",
-            "name: TestingScript\ncommonfields:\n id: f1e4c6e5-0d44-48a0-8020-a9711243e918",
-            False,
-        ),
-        (
-            "name: Playbook\ncommonfields:\n id: f1e4c6e5-0d44-48a0-8020-a9711243e918",
-            "playbook-Testing.yml",
-            "name: Playbook\ncommonfields:\n id: f1e4c6e5-0d44-48a0-8020-a9711243e918",
-            True,
-        ),
+        ({"name": "name 1"}, "Playbook", "name_1.yml"),
+        ({"name": "name 1"}, "Field", "name_1.json"),
+        ({"name": "name with / slash in it"}, "Playbook", "name_with_slash_in_it.yml"),
+        ({"id": "id 1"}, "Field", "id_1.json"),
     ],
 )
-def test_download_playbook(
-    original_string, object_name, expected_string, should_download_expected_res
-):
-    downloader = Downloader(output="", input="", regex="", all_custom_content=True)
-    should_download_playbook = downloader.should_download_playbook(object_name)
-    final_string = downloader.download_playbook_yaml(original_string)
-    assert should_download_playbook == should_download_expected_res
-    assert final_string == expected_string
+def test_build_file_name(content_item: dict, content_type: str, expected_result: str):
+    downloader = Downloader()
 
+    downloader.system_item_type = content_type
+    file_name = downloader.generate_content_file_name(content_item=content_item, content_item_type=content_type)
 
-@pytest.mark.parametrize(
-    "original_string, uuids_to_name_map, expected_string",
-    [
-        (
-            "name: TestingScript\ncommonfields:\n id: f1e4c6e5-0d44-48a0-8020-a9711243e918",
-            {},
-            "name: TestingScript\ncommonfields:\n id: f1e4c6e5-0d44-48a0-8020-a9711243e918",
-        ),
-        (
-            '{"name":"TestingField","script":"f1e4c6e5-0d44-48a0-8020-a9711243e918"}',
-            {"f1e4c6e5-0d44-48a0-8020-a9711243e918": "TestingScript"},
-            '{"name":"TestingField","script":"TestingScript"}',
-        ),
-        (
-            '{"name":"TestingLayout","detailsV2":{"tabs":[{"sections":[{'
-            '"items":[{"scriptId":"f1e4c6e5-0d44-48a0-8020-a9711243e918"'
-            "}]}]}]}}",
-            {"f1e4c6e5-0d44-48a0-8020-a9711243e918": "TestingScript"},
-            '{"name":"TestingLayout","detailsV2":{"tabs":[{"sections":[{'
-            '"items":[{"scriptId":"TestingScript"'
-            "}]}]}]}}",
-        ),
-    ],
-)
-def test_replace_uuids(original_string, uuids_to_name_map, expected_string):
-    downloader = Downloader(output="", input="", regex="", all_custom_content=True)
-    final_string = downloader.replace_uuids(
-        original_string, uuids_to_name_map, "file_name"
-    )
-    assert final_string == expected_string
+    assert file_name == expected_result
 
 
 @pytest.mark.parametrize("source_is_unicode", (True, False))
@@ -1378,7 +1277,6 @@ def test_list_files_flag(mocker):
                       '--------------------------  ----------------\n'
                       'CommonServerUserPowerShell  script\n'
                       'CommonServerUserPython      script\n'
-                      'CommonUserServer            script\n'
                       'custom_automation           script\n'
                       'custom_script               script\n'
                       'custom_incident             incidentfield\n'
